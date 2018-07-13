@@ -20,10 +20,10 @@
   version = "v1.2.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/robiball/slack"
   packages = ["."]
-  revision = "8ab4d0b364ef1e9af5d102531da20d5ec902b6c4"
-  version = "v0.2.0"
+  revision = "7c1b0c696b8435e1b944d9dd88dc0184799f7a11"
 
 [[projects]]
   branch = "master"
@@ -34,6 +34,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e1f4d118fe5cc806aac99afa9e52daa46f2157a2aba4e8254611c80081b9b3cc"
+  inputs-digest = "2272bb7a8abe32d3e51d449efe4c4bbdc0395a462109a165cb99cacbc50e4254"
   solver-name = "gps-cdcl"
   solver-version = 1
