@@ -31,13 +31,13 @@ func main() {
 	log.Info("Connected to Slack API")
 	// Start a server to respond to callbacks from Slack
 	s := server.NewSlackReceiver()
-	r := &server.Route{
+	sc := &server.SlashCommand{
 		Path:    "/slack/command/help",
 		Handler: handlers.DialogTest,
 	}
 
-	if err := s.AddRoute(r); err != nil {
-		log.Fatalf("Failed to add route to server: %s", err)
+	if err := s.AddSlashCommand(sc); err != nil {
+		log.Fatalf("Failed to add slash command to server: %s", err)
 	}
 	addr := viper.GetString("listen-address")
 	go func() {

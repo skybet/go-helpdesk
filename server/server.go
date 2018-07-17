@@ -9,67 +9,67 @@ import (
 // Set to nil to disable logging completely
 type LogFunc func(string, ...interface{})
 
-// RouteHandlerFunc is an http.HandlerFunc which can return an error
-type RouteHandlerFunc func(w http.ResponseWriter, r *http.Request) error
+// SlashCommandHandlerFunc is an http.HandlerFunc which can return an error
+type SlashCommandHandlerFunc func(w http.ResponseWriter, r *http.Request) error
 
-// RouteHandler is a function executed when a route is invoked
-type RouteHandler struct {
+// SlashCommandHandler is a function executed when a slash command is invoked
+type SlashCommandHandler struct {
 	Log LogFunc
-	H   RouteHandlerFunc
+	H   SlashCommandHandlerFunc
 }
 
 // ServeHTTP satisfies http.Handler interface
-func (h RouteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h SlashCommandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := h.H(w, r)
 	if err != nil {
 		h.Log("HTTP Error: %s", err)
 	}
 }
 
-// Route is a handler which is invoked when a path is matched
-type Route struct {
+// SlashCommand is a handler which is invoked when a path is matched
+type SlashCommand struct {
 	Path    string
-	Handler RouteHandlerFunc
+	Handler SlashCommandHandlerFunc
 }
 
 // SlackReceiver is a server which responds to events sent Slack in response to slash commands etc.
 type SlackReceiver struct {
-	routes map[string]*Route
+	slashCommands map[string]*SlashCommand
 }
 
 // NewSlackReceiver returns a new SlackReceiver
 func NewSlackReceiver() *SlackReceiver {
 	return &SlackReceiver{
-		routes: make(map[string]*Route),
+		slashCommands: make(map[string]*SlashCommand),
 	}
 }
 
 // Start the receiver, blocking
 func (s *SlackReceiver) Start(addr string, log LogFunc) error {
-	for _, r := range s.routes {
-		h := RouteHandler{Log: log, H: r.Handler}
+	for _, r := range s.slashCommands {
+		h := SlashCommandHandler{Log: log, H: r.Handler}
 		http.Handle(r.Path, h)
 	}
 	return http.ListenAndServe(addr, nil)
 }
 
-// AddRoute adds a new route
-func (s *SlackReceiver) AddRoute(route *Route) error {
+// AddSlashCommand adds a new slash command
+func (s *SlackReceiver) AddSlashCommand(sc *SlashCommand) error {
 	// TODO: Validate path
 	// Already exists?
-	if _, ok := s.routes[route.Path]; ok {
-		return fmt.Errorf("A route at this path is already configured")
+	if _, ok := s.slashCommands[sc.Path]; ok {
+		return fmt.Errorf("A slash command at this path is already configured")
 	}
-	s.routes[route.Path] = route
+	s.slashCommands[sc.Path] = sc
 	return nil
 }
 
-// RemoveRoute removes an existing route
-func (s *SlackReceiver) RemoveRoute(route *Route) error {
+// RemoveSlashCommand removes an existing slash command
+func (s *SlackReceiver) RemoveSlashCommand(sc *SlashCommand) error {
 	// Exists?
-	if _, ok := s.routes[route.Path]; !ok {
-		return fmt.Errorf("No route configured with this path")
+	if _, ok := s.slashCommands[sc.Path]; !ok {
+		return fmt.Errorf("No slash command configured with this path")
 	}
-	delete(s.routes, route.Path)
+	delete(s.slashCommands, sc.Path)
 	return nil
 }
