@@ -149,7 +149,7 @@ func doPost(ctx context.Context, client HTTPRequester, req *http.Request, intf i
 
 func postJson(ctx context.Context, client HTTPRequester, endpoint, token string, json []byte, intf interface{}, debug bool) error {
 	reqBody := bytes.NewBuffer(json)
-	req, err := http.NewRequest("POST", SLACK_API+endpoint, reqBody)
+	req, err := http.NewRequest("POST", endpoint, reqBody)
 	if err != nil {
 		return err
 	}
