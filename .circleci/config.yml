@@ -9,4 +9,7 @@ jobs:
     working_directory: /go/src/github.com/skybet/go-helpdesk
     steps:
       - checkout
+      - run: go get golang.org/x/tools/cmd/cover github.com/mattn/goveralls github.com/ory/go-acc
+      - run: go-acc -o coverage.txt ./...
       - run: go test -v ./...
+      - run: goveralls -service=circle-ci -coverprofile=coverage.txt -repotoken=$COVERALLS_REPO_TOKEN
