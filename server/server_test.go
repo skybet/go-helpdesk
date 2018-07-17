@@ -9,7 +9,9 @@ import (
 
 func TestRoutes(t *testing.T) {
 	s := NewSlackReceiver()
-	f := func(w http.ResponseWriter, r *http.Request) {}
+	f := func(w http.ResponseWriter, r *http.Request) error {
+		return nil
+	}
 	r := &Route{
 		Path:    "/foo",
 		Handler: f,
@@ -37,8 +39,9 @@ func TestRoutes(t *testing.T) {
 
 func TestHttp(t *testing.T) {
 	s := NewSlackReceiver()
-	f := func(w http.ResponseWriter, r *http.Request) {
+	f := func(w http.ResponseWriter, r *http.Request) error {
 		fmt.Fprintf(w, "Hello World")
+		return nil
 	}
 	r := &Route{
 		Path:    "/foo",
@@ -48,7 +51,7 @@ func TestHttp(t *testing.T) {
 		t.Fatalf("Unexpected error adding route: %s", err)
 	}
 	go func() {
-		if err := s.Start(":8080"); err != nil {
+		if err := s.Start(":8080", nil); err != nil {
 			t.Fatalf("Unexpected error starting server: %s", err)
 		}
 	}()
@@ -64,5 +67,35 @@ func TestHttp(t *testing.T) {
 	str := buf.String()
 	if str != "Hello World" {
 		t.Fatalf("Unexpected response: %s", str)
+	}
+}
+
+func TestErrors(t *testing.T) {
+	var errString string
+	s := NewSlackReceiver()
+	f := func(w http.ResponseWriter, r *http.Request) error {
+		return fmt.Errorf("WAH")
+	}
+	r := &Route{
+		Path:    "/bar",
+		Handler: f,
+	}
+	if err := s.AddRoute(r); err != nil {
+		t.Fatalf("Unexpected error adding route: %s", err)
+	}
+	log := func(msg string, i ...interface{}) {
+		errString = fmt.Sprintf(msg, i[0])
+	}
+	go func() {
+		if err := s.Start(":8081", log); err != nil {
+			t.Fatalf("Unexpected error starting server: %s", err)
+		}
+	}()
+	_, err := http.Get("http://localhost:8081/bar")
+	if err != nil {
+		t.Fatalf("Unexpected error making request: %s", err)
+	}
+	if errString != "HTTP Error: WAH" {
+		t.Fatalf("Expecting an error 'WAH' got '%s'", errString)
 	}
 }
