@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/skybet/go-helpdesk/handlers"
 	"github.com/skybet/go-helpdesk/server"
 	"github.com/skybet/go-helpdesk/wrapper"
 
@@ -32,7 +33,7 @@ func main() {
 	s := server.NewSlackReceiver()
 	r := &server.Route{
 		Path:    "/slack/command/help",
-		Handler: dialogTest,
+		Handler: handlers.DialogTest,
 	}
 
 	if err := s.AddRoute(r); err != nil {
@@ -40,7 +41,7 @@ func main() {
 	}
 	addr := viper.GetString("listen-address")
 	go func() {
-		if err := s.Start(addr); err != nil {
+		if err := s.Start(addr, log.Errorf); err != nil {
 			log.Fatalf("Unable to start server: %s", err)
 		}
 	}()

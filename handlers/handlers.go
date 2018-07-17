@@ -1,18 +1,19 @@
-package main
+package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/robiball/slack"
-	log "github.com/sirupsen/logrus"
 	"github.com/skybet/go-helpdesk/wrapper"
 )
 
-func dialogTest(w http.ResponseWriter, r *http.Request) {
+// DialogTest is a simple test handler to create a dialog in Slack
+func DialogTest(w http.ResponseWriter, r *http.Request) error {
 	//get_the_formatted_request and from it get the trigger id
 	sc, err := slack.SlashCommandParse(r)
 	if err != nil {
-		log.Errorf("Failed to parse slack slash command: %s", err)
+		return fmt.Errorf("Failed to parse slack slash command: %s", err)
 	}
 
 	descElement := slack.DialogTextElement{
@@ -35,6 +36,7 @@ func dialogTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := wrapper.OpenDialog(sc.TriggerID, dialog); err != nil {
-		log.Errorf("Failed to open dialog: %s", err)
+		return fmt.Errorf("Failed to open dialog: %s", err)
 	}
+	return nil
 }
