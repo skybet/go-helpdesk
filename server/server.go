@@ -5,13 +5,31 @@ import (
 	"net/http"
 )
 
+// LogFunc is an abstraction that allows using any external logger with a Printf signature
+// Set to nil to disable logging completely
+type LogFunc func(string, ...interface{})
+
+// RouteHandlerFunc is an http.HandlerFunc which can return an error
+type RouteHandlerFunc func(w http.ResponseWriter, r *http.Request) error
+
 // RouteHandler is a function executed when a route is invoked
-type RouteHandler func(w http.ResponseWriter, r *http.Request)
+type RouteHandler struct {
+	Log LogFunc
+	H   RouteHandlerFunc
+}
+
+// ServeHTTP satisfies http.Handler interface
+func (h RouteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	err := h.H(w, r)
+	if err != nil {
+		h.Log("HTTP Error: %s", err)
+	}
+}
 
 // Route is a handler which is invoked when a path is matched
 type Route struct {
 	Path    string
-	Handler RouteHandler
+	Handler RouteHandlerFunc
 }
 
 // SlackReceiver is a server which responds to events sent Slack in response to slash commands etc.
@@ -27,9 +45,10 @@ func NewSlackReceiver() *SlackReceiver {
 }
 
 // Start the receiver, blocking
-func (s *SlackReceiver) Start(addr string) error {
+func (s *SlackReceiver) Start(addr string, log LogFunc) error {
 	for _, r := range s.routes {
-		http.HandleFunc(r.Path, r.Handler)
+		h := RouteHandler{Log: log, H: r.Handler}
+		http.Handle(r.Path, h)
 	}
 	return http.ListenAndServe(addr, nil)
 }
