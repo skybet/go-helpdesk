@@ -12,11 +12,11 @@ type DialogTrigger struct {
 }
 
 type Dialog struct {
-	Title           string           `json:"title"`                         //Required.
 	CallbackId      string           `json:"callback_id"`                   //Required.
-	Elements        []DialogElement  `json:"elements"`                      //Required.
+	Title           string           `json:"title"`                         //Required.
 	SubmitLabel     string           `json:"submit_label,omitempty"`        //Optional. Default value is 'Submit'
 	NotifyOnCancel  bool             `json:"notify_on_cancel,omitempty"`    //Optional. Default value is false
+	Elements        []DialogElement  `json:"elements"`                      //Required.
 }
 
 type DialogElement interface {}
@@ -93,13 +93,15 @@ func (api *Client) OpenDialogContext(ctx context.Context, triggerId string, dial
 		TriggerId:  triggerId,
 		Dialog:     dialog,
 	}
-	jsonResp, _ := json.Marshal(resp)
-	response := &SlackResponse{}
-	if err := postJson(ctx, api.httpclient, "dialog.open", api.token, jsonResp, response, api.debug); err != nil {
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
 		return err
 	}
-	if !response.Ok {
-		return errors.New(response.Error)
+	response := &SlackResponse{}
+	endpoint := SLACK_API+"dialog.open"
+	if err := postJson(ctx, api.httpclient, endpoint, api.token, jsonResp, response, api.debug); err != nil {
+		return err
 	}
-	return nil
+
+	return response.Err()
 }
