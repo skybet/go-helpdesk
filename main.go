@@ -33,7 +33,7 @@ func main() {
 	s := server.NewSlackReceiver()
 	r := &server.Route{
 		Path:    "/slack/command/help",
-		Handler: handlers.DialogTest,
+		Handler: handlers.HelpRequest,
 	}
 
 	if err := s.AddRoute(r); err != nil {
