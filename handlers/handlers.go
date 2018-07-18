@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/robiball/slack"
+	"github.com/nlopes/slack"
 	"github.com/skybet/go-helpdesk/wrapper"
 )
 

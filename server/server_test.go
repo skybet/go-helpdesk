@@ -3,102 +3,73 @@ package server
 import (
 	"bytes"
 	"fmt"
-	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/nlopes/slack"
+	"github.com/nlopes/slack/slackevents"
 )
 
-func TestRoutes(t *testing.T) {
-	s := NewSlackReceiver()
-	f := func(w http.ResponseWriter, r *http.Request) error {
-		return nil
-	}
-	r := &Route{
-		Path:    "/foo",
-		Handler: f,
-	}
-	if err := s.AddRoute(r); err != nil {
-		t.Fatalf("Unexpected error: %s", err)
-	}
-	if x, ok := s.routes["/foo"]; ok {
-		if x != r {
-			t.Fatal("Expected to find a matching handler in routes")
-		}
-	} else {
-		t.Fatal("Expected to find /foo in routes")
-	}
-	if err := s.AddRoute(r); err == nil {
-		t.Fatalf("Hmm that should have errored")
-	}
-	if err := s.RemoveRoute(r); err != nil {
-		t.Fatalf("Unexpected error: %s", err)
-	}
-	if err := s.RemoveRoute(r); err == nil {
-		t.Fatal("Expected this to error")
-	}
-	if len(s.routes) != 0 {
-		t.Fatalf("Expected zero routes to be configured, found %d", len(s.routes))
-	}
-}
-
-func TestHttp(t *testing.T) {
-	s := NewSlackReceiver()
-	f := func(w http.ResponseWriter, r *http.Request) error {
-		fmt.Fprintf(w, "Hello World")
-		return nil
-	}
-	r := &Route{
-		Path:    "/foo",
-		Handler: f,
-	}
-	if err := s.AddRoute(r); err != nil {
-		t.Fatalf("Unexpected error adding route: %s", err)
-	}
-	go func() {
-		if err := s.Start(":8080", nil); err != nil {
-			t.Fatalf("Unexpected error starting server: %s", err)
-		}
-	}()
-	resp, err := http.Get("http://localhost:8080/foo")
-	if err != nil {
-		t.Fatalf("Unexpected error making request: %s", err)
-	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("Expected a 200 got %d", resp.StatusCode)
-	}
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
-	str := buf.String()
-	if str != "Hello World" {
-		t.Fatalf("Unexpected response: %s", str)
-	}
-}
-
-func TestErrors(t *testing.T) {
+func TestMatchSlashCommand(t *testing.T) {
 	var errString string
-	s := NewSlackReceiver()
-	f := func(w http.ResponseWriter, r *http.Request) error {
-		return fmt.Errorf("WAH")
-	}
-	r := &Route{
-		Path:    "/bar",
-		Handler: f,
-	}
-	if err := s.AddRoute(r); err != nil {
-		t.Fatalf("Unexpected error adding route: %s", err)
-	}
+	basePath := "/slack"
+	raw := "token=TOKEN&team_id=T01ABC&team_domain=example&channel_id=D8AD0L4UB&channel_name=directmessage&user_id=UABC123&user_name=bob.smith&command=%2Fbob-test&text=&response_url=https%3A%2F%2Fhooks.slack.com%2Fcommands%2FABC123%2F123456%2FABC123&trigger_id=400003447986.4709815545.5c0291e01b37fc97ab64d8d7888f6cda"
 	log := func(msg string, i ...interface{}) {
 		errString = fmt.Sprintf(msg, i[0])
 	}
-	go func() {
-		if err := s.Start(":8081", log); err != nil {
-			t.Fatalf("Unexpected error starting server: %s", err)
+	h := func(res *Response, req *Request, ctx interface{}) error {
+		c, ok := ctx.(slack.SlashCommand)
+		if !ok {
+			t.Fatalf("Expected slack.SlashCommand to be passed to the handler")
 		}
-	}()
-	_, err := http.Get("http://localhost:8081/bar")
-	if err != nil {
-		t.Fatalf("Unexpected error making request: %s", err)
+		if c.TeamID != "T01ABC" {
+			t.Fatalf("Unexpected value for TeamID: %s", c.TeamID)
+		}
+		return nil
 	}
-	if errString != "HTTP Error: WAH" {
-		t.Fatalf("Expecting an error 'WAH' got '%s'", errString)
+	s := NewSlackHandler(basePath, log)
+	s.HandleCommand("/bob-test", h)
+	body := bytes.NewBufferString(raw)
+	req := httptest.NewRequest("POST", "/slack", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+	resp := w.Result()
+
+	if resp.StatusCode != 200 {
+		t.Logf("ErrString: %s", errString)
+		t.Fatalf("Expected a 200 status. Got '%d'", resp.StatusCode)
+	}
+}
+
+func TestMatchActionEvent(t *testing.T) {
+	var errString string
+	basePath := "/slack"
+	raw := "payload=%7B%22type%22%3A%20%22dialog_submission%22%2C%22submission%22%3A%20%7B%22name%22%3A%20%22Sigourney%20Dreamweaver%22%2C%22email%22%3A%20%22sigdre%40example.com%22%2C%22phone%22%3A%20%22%2B1%20800-555-1212%22%2C%22meal%22%3A%20%22burrito%22%2C%22comment%22%3A%20%22No%20sour%20cream%20please%22%2C%22team_channel%22%3A%20%22C0LFFBKPB%22%2C%22who_should_sing%22%3A%20%22U0MJRG1AL%22%7D%2C%22callback_id%22%3A%20%22employee_offsite_1138b%22%2C%22team%22%3A%20%7B%22id%22%3A%20%22T1ABCD2E12%22%2C%22domain%22%3A%20%22coverbands%22%7D%2C%22user%22%3A%20%7B%22id%22%3A%20%22W12A3BCDEF%22%2C%22name%22%3A%20%22dreamweaver%22%7D%2C%22channel%22%3A%20%7B%22id%22%3A%20%22C1AB2C3DE%22%2C%22name%22%3A%20%22coverthon-1999%22%7D%2C%22action_ts%22%3A%20%22936893340.702759%22%2C%22token%22%3A%20%22TOKEN%22%2C%22response_url%22%3A%20%22https%3A%2F%2Fhooks.slack.com%2Fapp%2FT012AB0A1%2F123456789%2FJpmK0yzoZDeRiqfeduTBYXWQ%22%7D"
+	log := func(msg string, i ...interface{}) {
+		errString = fmt.Sprintf(msg, i[0])
+	}
+	h := func(res *Response, req *Request, ctx interface{}) error {
+		m, ok := ctx.(slackevents.MessageAction)
+		if !ok {
+			t.Fatalf("Expected slackevents.MessageAction to be passed to the handler")
+		}
+		if m.User.Id != "W12A3BCDEF" {
+			t.Fatalf("Unexpected value for User.Id: %s", m.User.Id)
+		}
+		return nil
+	}
+	s := NewSlackHandler(basePath, log)
+	s.HandleCallback("employee_offsite_1138b", h)
+	body := bytes.NewBufferString(raw)
+	req := httptest.NewRequest("POST", "/slack", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+	resp := w.Result()
+
+	if resp.StatusCode != 200 {
+		t.Logf("ErrString: %s", errString)
+		t.Fatalf("Expected a 200 status. Got '%d'", resp.StatusCode)
 	}
 }

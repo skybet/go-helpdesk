@@ -1,15 +1,22 @@
 package server
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
-	"github.com/robiball/slack"
-	"github.com/robiball/slack/slackevents"
+	"github.com/nlopes/slack"
+	"github.com/nlopes/slack/slackevents"
 )
+
+// LogFunc is an abstraction that allows using any external logger with a Printf signature
+// Set to nil to disable logging completely
+type LogFunc func(string, ...interface{})
+
+// SlackHandlerFunc is an http.HandlerFunc which can return an error and has a context
+// Context varies depending on the request type and is for injecting arbitrary data in
+// at routing time
+type SlackHandlerFunc func(res *Response, req *Request, ctx interface{}) error
 
 // Route is a handler which is invoked when a path is matched
 type Route struct {
@@ -35,45 +42,36 @@ func (r *Response) Text(code int, body string) {
 	io.WriteString(r, fmt.Sprintf("%s\n", body))
 }
 
-// LogFunc is an abstraction that allows using any external logger with a Printf signature
-// Set to nil to disable logging completely
-type LogFunc func(string, ...interface{})
-
-// SlackHandlerFunc is an http.HandlerFunc which can return an error and has a context
-// Context varies depending on the request type and is for injecting arbitrary data in
-// at routing time
-type SlackHandlerFunc func(res *Response, req *Request, ctx interface{}) error
-
 // SlackHandler is a function executed when a route is invoked
 type SlackHandler struct {
 	Log          LogFunc
 	Routes       []*Route
 	DefaultRoute SlackHandlerFunc
 	BasePath     string
-	Context      interface{}
 }
 
 // NewSlackHandler returns an initialised SlackHandler
-func NewSlackHandler(basePath string, l LogFunc) *SlackHandlerFunc {
-	return &SlackHandlerFunc{
+func NewSlackHandler(basePath string, l LogFunc) *SlackHandler {
+	return &SlackHandler{
 		DefaultRoute: func(res *Response, req *Request, ctx interface{}) error {
 			res.Text(http.StatusNotFound, "Not found")
+			return nil
 		},
 		Log:      l,
-		BasePath: string,
+		BasePath: basePath,
 	}
 }
 
 // HandleCallback registers a handler to be executed when a specific
 // CallbackID is present in the request payload sent to the BasePath
-func (h SlackHandler) HandleCallback(cid string, f SlackHandlerFunc) {
+func (h *SlackHandler) HandleCallback(cid string, f SlackHandlerFunc) {
 	r := &Route{Path: h.BasePath, CallbackID: cid, Handler: f}
 	h.handle(r)
 }
 
 // HandleCommand registers a handler to be executed when a slash command
 // request is sent to the BasePath
-func (h SlackHandler) HandleCommand(c string, f SlackHandlerFunc) {
+func (h *SlackHandler) HandleCommand(c string, f SlackHandlerFunc) {
 	r := &Route{Path: h.BasePath, Command: c, Handler: f}
 	h.handle(r)
 }
@@ -84,13 +82,13 @@ func (h SlackHandler) HandlePath(p string, f SlackHandlerFunc) {
 	h.handle(r)
 }
 
-func (h SlackHandler) handle(r *Route) {
+func (h *SlackHandler) handle(r *Route) {
 	// TODO: validate no duplicates
 	h.Routes = append(h.Routes, r)
 }
 
 // ServeHTTP satisfies http.Handler interface
-func (h SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := &Request{Request: r}
 	res := &Response{w}
 
@@ -113,22 +111,26 @@ func (h SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			if err := h.DefaultRoute(res, req); err != nil {
+			if err := h.DefaultRoute(res, req, nil); err != nil {
 				h.Log("HTTP serve error: %s", err)
 			}
 			return
 		}
 		// Attempt to parse as an event
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(r.Body)
-		body := buf.String()
-		event, err := slackevents.ParseEvent(
-			json.RawMessage(body),
+		if err := r.ParseForm(); err != nil {
+			h.Log("HTTP serve error: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		event, err := slackevents.ParseActionEvent(
+			r.Form.Get("payload"),
 			// TODO: This needs to be our real App Token
 			slackevents.OptionVerifyToken(&slackevents.TokenComparator{"TOKEN"}),
 		)
 		if err != nil {
+			h.Log("HTTP serve error: %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 		if len(event.CallbackId) > 0 {
 			for _, rt := range h.Routes {
@@ -156,7 +158,7 @@ func (h SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// DefaultRoute is executed if nothing matches
 	// Handle the error in case a custom DefaultRoute is supplied
-	if err := h.DefaultRoute(res, req); err != nil {
+	if err := h.DefaultRoute(res, req, nil); err != nil {
 		h.Log("HTTP serve error: %s", err)
 	}
 }
