@@ -8,28 +8,28 @@ import (
 	"github.com/skybet/go-helpdesk/wrapper"
 )
 
-// DialogTest is a simple test handler to create a dialog in Slack
-func DialogTest(w http.ResponseWriter, r *http.Request) error {
-	//get_the_formatted_request and from it get the trigger id
+// HelpRequest is a handler that creates a dialog in Slack to capture a
+// customers help request
+func HelpRequest(w http.ResponseWriter, r *http.Request) error {
 	sc, err := slack.SlashCommandParse(r)
 	if err != nil {
 		return fmt.Errorf("Failed to parse slack slash command: %s", err)
 	}
 
-	descElement := slack.DialogTextElement{
+	descriptionElement := slack.DialogTextElement{
 		Type:        "text",
-		Label:       "Description",
-		Placeholder: "Description...",
-		Name:        "FOO",
+		Label:       "Help Request Description",
+		Placeholder: "Describe what you would like help with ...",
+		Name:        "HelpRequestDescription",
 	}
 
 	elements := []slack.DialogElement{
-		descElement,
+		descriptionElement,
 	}
 
 	dialog := slack.Dialog{
-		CallbackId:     "PETETEST",
-		Title:          "Create an Incident",
+		CallbackId:     "HelpRequest",
+		Title:          "Request Help",
 		SubmitLabel:    "Create",
 		NotifyOnCancel: true,
 		Elements:       elements,
