@@ -32,6 +32,9 @@ func TestRoutes(t *testing.T) {
 	if err := s.RemoveRoute(r); err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
+	if err := s.RemoveRoute(r); err == nil {
+		t.Fatal("Expected this to error")
+	}
 	if len(s.routes) != 0 {
 		t.Fatalf("Expected zero routes to be configured, found %d", len(s.routes))
 	}
