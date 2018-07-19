@@ -17,6 +17,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Generate mocks - go get github.com/vektra/mockery/.../ first
+//go:generate mockery -name SlackWrapper -recursive
+
 func main() {
 	initFlags()
 	// Connect to Slack
@@ -26,9 +29,11 @@ func main() {
 		pflag.PrintDefaults()
 		return
 	}
-	if err := wrapper.Init(appToken, botToken); err != nil {
+	sw, err := wrapper.New(appToken, botToken)
+	if err != nil {
 		log.Fatalf("Error initialising the Slack API: %s", err)
 	}
+	handlers.Init(sw)
 	log.Info("Connected to Slack API")
 	// Start a server to respond to callbacks from Slack
 	s := server.NewSlackHandler("/slack", appToken, log.Errorf)

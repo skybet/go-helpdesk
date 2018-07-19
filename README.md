@@ -10,11 +10,17 @@ It is possible to use the basic bundled functionality by simply deploying the bu
 
 ## Development
 
+### Dependencies
+
 We have chosen to commit the vendor tree as it gives us repeatable builds and control over our dependencies. Please run `dep ensure` to update the vendor tree. This is not done by CI.
+
+### Automated Testing
+
+We use [Mockery](https://github.com/vektra/mockery) for test mocks. Use `go generate` to regenerate test doubles after you have go getted the mockery package. If you need to add new interfaces to be mocked, add new generate comments to the top of `main.go`.
 
 Any commit without appropriate test coverage will be rejected.
 
-## Usage
+## CLI Usage
 
 ### Flags
 
@@ -35,3 +41,7 @@ _Nb._ Flags take precedence over environment variables.
 ### Slack Tokens
 
 `go-helpdesk` requires two different tokens to connect to Slack. An app token is provided when creating a new slash command and a bot token is required to send messages etc. (_TODO: expand this_)
+
+## Library Usage
+
+Check the example `main.go` (_TODO: write a proper guide once API is stable_)
