@@ -8,6 +8,13 @@ import (
 	"github.com/skybet/go-helpdesk/wrapper"
 )
 
+var slackWrapper wrapper.SlackWrapper
+
+// Init initialises any external dependencies
+func Init(sw wrapper.SlackWrapper) {
+	slackWrapper = sw
+}
+
 // HelpRequest is a handler that creates a dialog in Slack to capture a
 // customers help request
 func HelpRequest(res *server.Response, req *server.Request, ctx interface{}) error {
@@ -34,7 +41,7 @@ func HelpRequest(res *server.Response, req *server.Request, ctx interface{}) err
 		Elements:       elements,
 	}
 
-	if err := wrapper.OpenDialog(sc.TriggerID, dialog); err != nil {
+	if err := slackWrapper.OpenDialog(sc.TriggerID, dialog); err != nil {
 		return fmt.Errorf("Failed to open dialog: %s", err)
 	}
 	return nil
