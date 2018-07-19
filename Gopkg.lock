@@ -55,16 +55,19 @@
   revision = "f15292f7a699fcc1a38a80977f80a046874ba8ac"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/nlopes/slack"
+  packages = [
+    ".",
+    "slackevents"
+  ]
+  revision = "8ac1139f0b5b26ddb4a5c05b727e7ce155cc37f4"
+
+[[projects]]
   name = "github.com/pelletier/go-toml"
   packages = ["."]
   revision = "c01d1270ff3e442a8a57cddc1c92dc1138598194"
   version = "v1.2.0"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/robiball/slack"
-  packages = ["."]
-  revision = "0af4da2ff7de0c81b918c33c49223261a85f5912"
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
@@ -148,6 +151,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e86ace2e0b9c1c65fd68aee6d529b32d7643e95f7a29f33c1691052596d38ef6"
+  inputs-digest = "451774d48a1f2a10c7e43991db88578696c41415264b7f5726816448ec2d7ac8"
   solver-name = "gps-cdcl"
   solver-version = 1

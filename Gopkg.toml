@@ -31,7 +31,7 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/robiball/slack"
+  name = "github.com/nlopes/slack"
 
 [prune]
   go-tests = true

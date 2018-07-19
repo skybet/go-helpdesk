@@ -2,6 +2,7 @@
 package main
 
 import (
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -30,18 +31,11 @@ func main() {
 	}
 	log.Info("Connected to Slack API")
 	// Start a server to respond to callbacks from Slack
-	s := server.NewSlackReceiver()
-	r := &server.Route{
-		Path:    "/slack/command/help",
-		Handler: handlers.HelpRequest,
-	}
-
-	if err := s.AddRoute(r); err != nil {
-		log.Fatalf("Failed to add route to server: %s", err)
-	}
+	s := server.NewSlackHandler("/slack", appToken, log.Errorf)
+	s.HandleCommand("/help-me", handlers.HelpRequest)
 	addr := viper.GetString("listen-address")
 	go func() {
-		if err := s.Start(addr, log.Errorf); err != nil {
+		if err := http.ListenAndServe(addr, s); err != nil {
 			log.Fatalf("Unable to start server: %s", err)
 		}
 	}()

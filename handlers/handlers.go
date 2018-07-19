@@ -2,20 +2,19 @@ package handlers
 
 import (
 	"fmt"
-	"net/http"
 
-	"github.com/robiball/slack"
+	"github.com/nlopes/slack"
+	"github.com/skybet/go-helpdesk/server"
 	"github.com/skybet/go-helpdesk/wrapper"
 )
 
 // HelpRequest is a handler that creates a dialog in Slack to capture a
 // customers help request
-func HelpRequest(w http.ResponseWriter, r *http.Request) error {
-	sc, err := slack.SlashCommandParse(r)
-	if err != nil {
-		return fmt.Errorf("Failed to parse slack slash command: %s", err)
+func HelpRequest(res *server.Response, req *server.Request, ctx interface{}) error {
+	sc, ok := ctx.(slack.SlashCommand)
+	if !ok {
+		return fmt.Errorf("Expected a slack.SlashCommand to be passed to the handler")
 	}
-
 	descriptionElement := slack.DialogTextElement{
 		Type:        "text",
 		Label:       "Help Request Description",

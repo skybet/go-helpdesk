@@ -1,13 +1,13 @@
 package wrapper
 
 import (
-	"github.com/robiball/slack"
 	"github.com/adampointer/go-slackbot"
+	"github.com/nlopes/slack"
 
 	"fmt"
 )
 
-var(
+var (
 	SlackApp *slack.Client
 	SlackBot *slackbot.Bot
 )
