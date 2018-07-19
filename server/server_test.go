@@ -27,10 +27,10 @@ func TestMatchSlashCommand(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, log)
+	s := NewSlackHandler(basePath, "TOKEN", log)
 	s.HandleCommand("/bob-test", h)
 	body := bytes.NewBufferString(raw)
-	req := httptest.NewRequest("POST", "/slack", body)
+	req := httptest.NewRequest("POST", basePath, body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	s.ServeHTTP(w, req)
@@ -39,6 +39,38 @@ func TestMatchSlashCommand(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Logf("ErrString: %s", errString)
 		t.Fatalf("Expected a 200 status. Got '%d'", resp.StatusCode)
+	}
+}
+
+func TestUnmatchedSlashCommand(t *testing.T) {
+	var errString string
+	basePath := "/slack"
+	raw := "token=TOKEN&team_id=T01ABC&team_domain=example&channel_id=D8AD0L4UB&channel_name=directmessage&user_id=UABC123&user_name=bob.smith&command=%2Fbob-test&text=&response_url=https%3A%2F%2Fhooks.slack.com%2Fcommands%2FABC123%2F123456%2FABC123&trigger_id=400003447986.4709815545.5c0291e01b37fc97ab64d8d7888f6cda"
+	log := func(msg string, i ...interface{}) {
+		errString = fmt.Sprintf(msg, i[0])
+	}
+	h := func(res *Response, req *Request, ctx interface{}) error {
+		c, ok := ctx.(slack.SlashCommand)
+		if !ok {
+			t.Fatalf("Expected slack.SlashCommand to be passed to the handler")
+		}
+		if c.TeamID != "T01ABC" {
+			t.Fatalf("Unexpected value for TeamID: %s", c.TeamID)
+		}
+		return nil
+	}
+	s := NewSlackHandler(basePath, "TOKEN", log)
+	s.HandleCommand("/foobar", h)
+	body := bytes.NewBufferString(raw)
+	req := httptest.NewRequest("POST", basePath, body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+	resp := w.Result()
+
+	if resp.StatusCode != 404 {
+		t.Logf("ErrString: %s", errString)
+		t.Fatalf("Expected a 404 status. Got '%d'", resp.StatusCode)
 	}
 }
 
@@ -59,10 +91,10 @@ func TestMatchActionEvent(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, log)
+	s := NewSlackHandler(basePath, "TOKEN", log)
 	s.HandleCallback("employee_offsite_1138b", h)
 	body := bytes.NewBufferString(raw)
-	req := httptest.NewRequest("POST", "/slack", body)
+	req := httptest.NewRequest("POST", basePath, body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	s.ServeHTTP(w, req)
@@ -71,5 +103,72 @@ func TestMatchActionEvent(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Logf("ErrString: %s", errString)
 		t.Fatalf("Expected a 200 status. Got '%d'", resp.StatusCode)
+	}
+}
+
+func TestMalformedActionEvent(t *testing.T) {
+	var errString string
+	basePath := "/slack"
+	raw := "payload=nonsense"
+	log := func(msg string, i ...interface{}) {
+		errString = fmt.Sprintf(msg, i[0])
+	}
+	s := NewSlackHandler(basePath, "TOKEN", log)
+	body := bytes.NewBufferString(raw)
+	req := httptest.NewRequest("POST", basePath, body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+	resp := w.Result()
+
+	if resp.StatusCode != 404 {
+		t.Fatalf("Expected a 404 status. Got '%d'", resp.StatusCode)
+	}
+	if errString != "Error parsing Slack Event: MessageAction unmarshalling failed" {
+		t.Fatalf("Unexpected error string: %s", errString)
+	}
+}
+
+func TestMatchPath(t *testing.T) {
+	var errString string
+	log := func(msg string, i ...interface{}) {
+		errString = fmt.Sprintf(msg, i[0])
+	}
+	h := func(res *Response, req *Request, ctx interface{}) error {
+		return nil
+	}
+	s := NewSlackHandler("/slack", "TOKEN", log)
+	s.HandlePath("/foo", h)
+	body := bytes.NewBufferString("foo=bar")
+	req := httptest.NewRequest("POST", "/foo", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+	resp := w.Result()
+
+	if resp.StatusCode != 200 {
+		t.Logf("ErrString: %s", errString)
+		t.Fatalf("Expected a 200 status. Got '%d'", resp.StatusCode)
+	}
+}
+
+func TestHandlerErrors(t *testing.T) {
+	var errString string
+	log := func(msg string, i ...interface{}) {
+		errString = fmt.Sprintf(msg, i[0])
+	}
+	h := func(res *Response, req *Request, ctx interface{}) error {
+		return fmt.Errorf("Serious problem")
+	}
+	s := NewSlackHandler("/slack", "TOKEN", log)
+	s.HandlePath("/foo", h)
+	body := bytes.NewBufferString("foo=bar")
+	req := httptest.NewRequest("POST", "/foo", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+
+	if errString != "HTTP handler error: Serious problem" {
+		t.Fatalf("Unexpected error string: %s", errString)
 	}
 }
