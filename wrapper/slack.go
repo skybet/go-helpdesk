@@ -41,7 +41,7 @@ func New(appToken, botToken string) (*Slack, error) {
 func (s *Slack) OpenDialog(triggerID string, dialog slack.Dialog) error {
 	err := s.app.OpenDialog(triggerID, dialog)
 	if err != nil {
-		fmt.Errorf("Error opening dialog. ", err)
+		fmt.Errorf("error opening dialog. %s", err)
 		return err
 	}
 	return err
