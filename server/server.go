@@ -7,6 +7,13 @@ import (
 
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
+	"io/ioutil"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"time"
+	"strconv"
+	"bytes"
 )
 
 // LogFunc is an abstraction that allows using any external logger with a Printf signature
@@ -49,10 +56,11 @@ type SlackHandler struct {
 	DefaultRoute SlackHandlerFunc
 	basePath     string
 	appToken     string
+	secretToken  string
 }
 
 // NewSlackHandler returns an initialised SlackHandler
-func NewSlackHandler(basePath, appToken string, l LogFunc) *SlackHandler {
+func NewSlackHandler(basePath, appToken, secretToken string, l LogFunc) *SlackHandler {
 	return &SlackHandler{
 		DefaultRoute: func(res *Response, req *Request, ctx interface{}) error {
 			res.Text(http.StatusNotFound, "Not found")
@@ -61,6 +69,7 @@ func NewSlackHandler(basePath, appToken string, l LogFunc) *SlackHandler {
 		Log:      l,
 		basePath: basePath,
 		appToken: appToken,
+		secretToken: secretToken,
 	}
 }
 
@@ -98,6 +107,11 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := f(res, req, ctx); err != nil {
 			h.Log("HTTP handler error: %s", err)
 		}
+	}
+
+	if !h.validRequest(r) {
+		http.Error(w, "invalid slack request", 400)
+		return
 	}
 
 	// First check if path matches our BasePath
@@ -156,4 +170,46 @@ func (h *SlackHandler) actionEventHelper(r *http.Request) (m slackevents.Message
 		slackevents.OptionVerifyToken(&slackevents.TokenComparator{h.appToken}),
 	)
 	return
+}
+
+func (h *SlackHandler) validRequest(r *http.Request) bool {
+	slackTimestampHeader := r.Header.Get("X-Slack-Request-Timestamp")
+	slackTimestamp, err := strconv.ParseInt(slackTimestampHeader, 10, 64)
+
+	// Abort if timestamp is invalid
+	if err != nil {
+		h.Log("Invalid timestamp sent from slack", err)
+		return false
+	}
+
+	// Abort if timestamp is stale (older than 5 minutes)
+	now := int64(time.Now().Unix())
+	if (now - slackTimestamp) > (60 * 5) {
+		h.Log("Stale timestamp sent from slack", err)
+		return false
+	}
+
+	// Abort if request body is invalid
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		h.Log("Invalid request body sent from slack", err)
+		return false
+	}
+	slackBody := string(body)
+
+	// Abort if the signature does not correspond to the signing secret
+	slackBaseStr := []byte(fmt.Sprintf("v0:%d:%s", slackTimestamp, slackBody))
+	slackSignature := r.Header.Get("X-Slack-Signature")
+	sec := hmac.New(sha256.New, []byte(h.secretToken))
+	sec.Write(slackBaseStr)
+	mySig := fmt.Sprintf("v0=%s", []byte(hex.EncodeToString(sec.Sum(nil))))
+	fmt.Printf("MY SIG: %s\n", mySig)
+	if mySig != slackSignature {
+		h.Log("Invalid signature sent from slack, ignoring request.", nil)
+		return false
+	}
+
+	// All good! The request is valid
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+	return true
 }

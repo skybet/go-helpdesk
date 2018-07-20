@@ -27,6 +27,7 @@ Any commit without appropriate test coverage will be rejected.
 ```
   -a, --app-token string        Slack API token for your slash command (required)
   -b, --bot-token string        Slack API token for bot integration (required)
+  -s, --signing-secret string   Slack API signing secret for request verification (required)
   -l, --listen-address string   Address to listen for Slack callbacks on (default ":4390")
 ```
 
@@ -40,7 +41,7 @@ _Nb._ Flags take precedence over environment variables.
 
 ### Slack Tokens
 
-`go-helpdesk` requires two different tokens to connect to Slack. An app token is provided when creating a new slash command and a bot token is required to send messages etc. (_TODO: expand this_)
+`go-helpdesk` requires three different tokens to connect to Slack. An app token is provided when creating a new slash command and a bot token is required to send messages etc. A signing secret for your app is also required, to enable us to ensure that requests are legitimate.(_TODO: expand this_)
 
 ## Library Usage
 
