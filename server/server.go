@@ -117,13 +117,15 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// First check if path matches our BasePath
-	// If yes then attempt to decode it to match on Command or CallbackID
+	// If yes then attempt to decode it to match on Command or CallbackID / InteractionType
 	// If no then match custom paths
 	if r.URL.Path == h.basePath {
-		// Attempt to parse as a slash command first
-		// Ignore errors here as the library always returns a non-nil struct
-		sc, _ := slack.SlashCommandParse(r)
-		if len(sc.Command) > 0 {
+		if err := r.ParseForm(); err != nil {
+			fmt.Errorf("Unable to parse request from Slack: %s", err)
+		}
+
+		if r.Form.Get("command") != "" {
+			sc, _ := slack.SlashCommandParse(r)
 			// Loop through all our routes and attempt a match on the Command
 			for _, rt := range h.Routes {
 				if rt.Command == sc.Command {
@@ -135,21 +137,37 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// It's a command but we have no handler for it - 404
 			serve(h.DefaultRoute, nil)
 			return
-		}
-		// Attempt to parse as an event
-		event, err := h.actionEventHelper(r)
-		if err != nil {
-			h.Log("Error parsing Slack Event: %s", err)
-		}
-		if len(event.CallbackId) > 0 {
+		} else {
+			var payloadMap map[string]interface{}
+			payloadJSON := r.Form.Get("payload")
+			if err := json.Unmarshal([]byte(payloadJSON), &payloadMap); err != nil {
+				h.Log("%s", err)
+				serve(h.DefaultRoute, nil)
+				return
+			}
+			if payloadMap["type"] == nil {
+				h.Log("Error parsing Slack Event: %s", "Missing value for 'type' key")
+				serve(h.DefaultRoute, nil)
+				return
+			}
+			if payloadMap["callback_id"] == nil {
+				h.Log("Error parsing Slack Event: %s", "Missing value for 'callback_id' key")
+				serve(h.DefaultRoute, nil)
+				return
+			}
+			// Loop through all our routes and attempt a match on the InteractionType / CallbackID pair
 			for _, rt := range h.Routes {
-				if rt.CallbackID == event.CallbackId {
-					// Send the event struct as context
-					serve(rt.Handler, event)
+				if payloadMap["type"] == rt.InteractionType && payloadMap["callback_id"] == rt.CallbackID {
+					// Send the payloadJSON as context
+					serve(rt.Handler, payloadJSON)
 					return
 				}
 			}
 		}
+		// Its path is the basepath, but we dont have a matching command or
+		// action handler for it - 404
+		serve(h.DefaultRoute, nil)
+		return
 	} else {
 		// Loop through all our routes and attempt a match on the path
 		for _, rt := range h.Routes {
@@ -205,7 +223,6 @@ func (h *SlackHandler) validRequest(r *http.Request) bool {
 	sec := hmac.New(sha256.New, []byte(h.secretToken))
 	sec.Write(slackBaseStr)
 	mySig := fmt.Sprintf("v0=%s", []byte(hex.EncodeToString(sec.Sum(nil))))
-	fmt.Printf("MY SIG: %s\n", mySig)
 	if mySig != slackSignature {
 		h.Log("Invalid signature sent from slack, ignoring request.", nil)
 		return false
