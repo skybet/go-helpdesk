@@ -39,7 +39,7 @@ func main() {
 	// Start a server to respond to callbacks from Slack
 	s := server.NewSlackHandler("/slack", appToken, signingSecret, log.Errorf)
 	s.HandleCommand("/help-me", handlers.HelpRequest)
-	s.HandleCallback("HelpRequest", handlers.HelpCallback)
+	s.HandleCallback("dialog_submission", "HelpRequest", handlers.HelpCallback)
 	addr := viper.GetString("listen-address")
 	go func() {
 		if err := http.ListenAndServe(addr, s); err != nil {

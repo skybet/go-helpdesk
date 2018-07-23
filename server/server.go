@@ -1,19 +1,20 @@
 package server
 
 import (
-	"fmt"
-	"io"
-	"net/http"
-
-	"github.com/nlopes/slack"
-	"github.com/nlopes/slack/slackevents"
-	"io/ioutil"
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"time"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"strconv"
-	"bytes"
+	"time"
+
+	"github.com/nlopes/slack"
+	"github.com/nlopes/slack/slackevents"
 )
 
 // LogFunc is an abstraction that allows using any external logger with a Printf signature
@@ -27,8 +28,8 @@ type SlackHandlerFunc func(res *Response, req *Request, ctx interface{}) error
 
 // Route is a handler which is invoked when a path is matched
 type Route struct {
-	CallbackID, Path, Command string
-	Handler                   SlackHandlerFunc
+	CallbackID, Path, Command, InteractionType string
+	Handler                                    SlackHandlerFunc
 }
 
 // Request wraps http.Request
@@ -66,17 +67,18 @@ func NewSlackHandler(basePath, appToken, secretToken string, l LogFunc) *SlackHa
 			res.Text(http.StatusNotFound, "Not found")
 			return nil
 		},
-		Log:      l,
-		basePath: basePath,
-		appToken: appToken,
+		Log:         l,
+		basePath:    basePath,
+		appToken:    appToken,
 		secretToken: secretToken,
 	}
 }
 
 // HandleCallback registers a handler to be executed when a specific
-// CallbackID is present in the request payload sent to the BasePath
-func (h *SlackHandler) HandleCallback(cid string, f SlackHandlerFunc) {
-	r := &Route{Path: h.basePath, CallbackID: cid, Handler: f}
+// InteractionType / CallbackID pair is present in the request
+// payload sent to the BasePath
+func (h *SlackHandler) HandleCallback(it, cid string, f SlackHandlerFunc) {
+	r := &Route{Path: h.basePath, CallbackID: cid, InteractionType: it, Handler: f}
 	h.handle(r)
 }
 
