@@ -116,12 +116,19 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Does it have a valid callback payload? - If so, it's a callback
-		payload, _ := req.CallbackPayload()
+		payload, err := req.CallbackPayload()
+		if err != nil {
+			h.Logf("Error parsing payload: %s", err)
+		}
 		// Loop through all our routes and attempt a match on the InteractionType / CallbackID pair
 		for _, rt := range h.Routes {
 			if payload.MatchRoute(rt) {
-				// Send the payloadJSON as context
-				serve(rt.Handler, payload)
+				// Send the payload as context
+				t, err := payload.Mutate()
+				if err != nil {
+					h.Logf("Error mutating %s payload: %s", payload["type"], err)
+				}
+				serve(rt.Handler, t)
 				return
 			}
 		}

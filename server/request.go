@@ -13,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mitchellh/mapstructure"
+	"github.com/nlopes/slack"
 )
 
 // Request wraps http.Request
@@ -97,7 +100,7 @@ func (c CallbackPayload) Validate() error {
 		errs = append(errs, "Missing value for 'callback_id' key")
 	}
 	if len(errs) > 0 {
-		return fmt.Errorf("Error(s) with callback payload: %s", strings.Join(errs, ", "))
+		return fmt.Errorf("%s", strings.Join(errs, ", "))
 	}
 	return nil
 }
@@ -108,4 +111,16 @@ func (c CallbackPayload) MatchRoute(r *Route) bool {
 		return true
 	}
 	return false
+}
+
+// Mutate the payload into a go type matching it's type field
+func (c CallbackPayload) Mutate() (interface{}, error) {
+	switch c["type"] {
+	case "dialog_submission":
+		var result slack.DialogCallback
+		err := mapstructure.Decode(c, &result)
+		return &result, err
+	default:
+		return c, nil
+	}
 }
