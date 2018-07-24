@@ -6,23 +6,27 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/nlopes/slack"
-	"github.com/nlopes/slack/slackevents"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"time"
-	"strconv"
+	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/nlopes/slack"
 )
 
 var (
 	slackSecret = "fake_secret"
-	basePath = "/slack"
-	errString string
-	log = func(msg string, i ...interface{}) {
+	basePath    = "/slack"
+	errString   string
+	logf        = func(msg string, i ...interface{}) {
 		errString = fmt.Sprintf(msg, i[0])
+	}
+	log = func(i ...interface{}) {
+		errString = fmt.Sprintf(i[0].(string))
 	}
 )
 
@@ -62,7 +66,7 @@ func TestMatchSlashCommand(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
 	s.HandleCommand("/bob-test", h)
 	resp := performGenericRequest(raw, basePath, s)
 
@@ -84,7 +88,7 @@ func TestUnmatchedSlashCommand(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
 	s.HandleCommand("/foobar", h)
 	resp := performGenericRequest(raw, basePath, s)
 
@@ -94,20 +98,26 @@ func TestUnmatchedSlashCommand(t *testing.T) {
 	}
 }
 
-func TestMatchActionEvent(t *testing.T) {
+func TestDialogSubmissionEvent(t *testing.T) {
+
 	raw := "payload=%7B%22type%22%3A%20%22dialog_submission%22%2C%22submission%22%3A%20%7B%22name%22%3A%20%22Sigourney%20Dreamweaver%22%2C%22email%22%3A%20%22sigdre%40example.com%22%2C%22phone%22%3A%20%22%2B1%20800-555-1212%22%2C%22meal%22%3A%20%22burrito%22%2C%22comment%22%3A%20%22No%20sour%20cream%20please%22%2C%22team_channel%22%3A%20%22C0LFFBKPB%22%2C%22who_should_sing%22%3A%20%22U0MJRG1AL%22%7D%2C%22callback_id%22%3A%20%22employee_offsite_1138b%22%2C%22team%22%3A%20%7B%22id%22%3A%20%22T1ABCD2E12%22%2C%22domain%22%3A%20%22coverbands%22%7D%2C%22user%22%3A%20%7B%22id%22%3A%20%22W12A3BCDEF%22%2C%22name%22%3A%20%22dreamweaver%22%7D%2C%22channel%22%3A%20%7B%22id%22%3A%20%22C1AB2C3DE%22%2C%22name%22%3A%20%22coverthon-1999%22%7D%2C%22action_ts%22%3A%20%22936893340.702759%22%2C%22token%22%3A%20%22TOKEN%22%2C%22response_url%22%3A%20%22https%3A%2F%2Fhooks.slack.com%2Fapp%2FT012AB0A1%2F123456789%2FJpmK0yzoZDeRiqfeduTBYXWQ%22%7D"
 	h := func(res *Response, req *Request, ctx interface{}) error {
-		m, ok := ctx.(slackevents.MessageAction)
+		js, ok := ctx.(string)
 		if !ok {
-			t.Fatalf("Expected slackevents.MessageAction to be passed to the handler")
+			t.Fatalf("Expected a SlackPayloadJSON to be passed to the handler")
 		}
-		if m.User.Id != "W12A3BCDEF" {
-			t.Fatalf("Unexpected value for User.Id: %s", m.User.Id)
+		var d *slack.DialogCallback
+		err := json.Unmarshal([]byte(js), &d)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if d.User.ID != "W12A3BCDEF" {
+			t.Fatalf("Unexpected value for User.Id: %s", d.User.ID)
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log)
-	s.HandleCallback("employee_offsite_1138b", h)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
+	s.HandleCallback("dialog_submission", "employee_offsite_1138b", h)
 	resp := performGenericRequest(raw, basePath, s)
 
 	if resp.StatusCode != 200 {
@@ -117,15 +127,43 @@ func TestMatchActionEvent(t *testing.T) {
 }
 
 func TestMalformedActionEvent(t *testing.T) {
-	raw := "payload=nonsense"
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log)
-	resp := performGenericRequest(raw, basePath, s)
-
-	if resp.StatusCode != 404 {
-		t.Fatalf("Expected a 404 status. Got '%d'", resp.StatusCode)
+	tt := []struct {
+		name  string
+		raw   string
+		sCode int
+		err   string
+	}{
+		{
+			"Fail on invalid JSON",
+			"payload=ssion%22%3A%20%7B%22name%22%3A%20%22Sigourney%20Dreamweaver%22%2C%22email%22%3A%20%22sigdre%40example.com%22%2C%22phone%22%3A%20%22%2B1%20800-555-1212%22%2C%22meal%22%3A%20%22burrito%22%2C%22comment%22%3A%20%22No%20sour%20cream%20please%22%2C%22team_channel%22%3A%20%22C0LFFBKPB%22%2C%22who_should_sing%22%3A%20%22U0MJRG1AL%22%7D%2C%22callback_id%22%3A%20%22employee_offsite_1138b%22%2C%22team%22%3A%20%7B%22id%22%3A%20%22T1ABCD2E12%22%2C%22domain%22%3A%20%22coverbands%22%7D%2C%22user%22%3A%20%7B%22id%22%3A%20%22W12A3BCDEF%22%2C%22name%22%3A%20%22dreamweaver%22%7D%2C%22channel%22%3A%20%7B%22id%22%3A%20%22C1AB2C3DE%22%2C%22name%22%3A%20%22coverthon-1999%22%7D%2C%22action_ts%22%3A%20%22936893340.702759%22%2C%22token%22%3A%20%22TOKEN%22%2C%22response_url%22%3A%20%22https%3A%2F%2Fhooks.slack.com%2Fapp%2FT012AB0A1%2F123456789%2FJpmK0yzoZDeRiqfeduTBYXWQ%22",
+			404,
+			"invalid character 's' looking for beginning of value",
+		},
+		{
+			"Fail on missing value for 'type'",
+			"payload=%7B%22submission%22%3A%20%7B%22name%22%3A%20%22Sigourney%20Dreamweaver%22%2C%22email%22%3A%20%22sigdre%40example.com%22%2C%22phone%22%3A%20%22%2B1%20800-555-1212%22%2C%22meal%22%3A%20%22burrito%22%2C%22comment%22%3A%20%22No%20sour%20cream%20please%22%2C%22team_channel%22%3A%20%22C0LFFBKPB%22%2C%22who_should_sing%22%3A%20%22U0MJRG1AL%22%7D%2C%22callback_id%22%3A%20%22employee_offsite_1138b%22%2C%22team%22%3A%20%7B%22id%22%3A%20%22T1ABCD2E12%22%2C%22domain%22%3A%20%22coverbands%22%7D%2C%22user%22%3A%20%7B%22id%22%3A%20%22W12A3BCDEF%22%2C%22name%22%3A%20%22dreamweaver%22%7D%2C%22channel%22%3A%20%7B%22id%22%3A%20%22C1AB2C3DE%22%2C%22name%22%3A%20%22coverthon-1999%22%7D%2C%22action_ts%22%3A%20%22936893340.702759%22%2C%22token%22%3A%20%22TOKEN%22%2C%22response_url%22%3A%20%22https%3A%2F%2Fhooks.slack.com%2Fapp%2FT012AB0A1%2F123456789%2FJpmK0yzoZDeRiqfeduTBYXWQ%22%7D",
+			404,
+			"Error parsing Slack Event: Missing value for 'type' key",
+		},
+		{
+			"Fail on missing value for 'callback_id'",
+			"payload=%7B%22type%22%3A%20%22dialog_submission%22%7D",
+			404,
+			"Error parsing Slack Event: Missing value for 'callback_id' key",
+		},
 	}
-	if errString != "Error parsing Slack Event: MessageAction unmarshalling failed" {
-		t.Fatalf("Unexpected error string: %s", errString)
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(T *testing.T) {
+			s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
+			resp := performGenericRequest(tc.raw, basePath, s)
+			if resp.StatusCode != tc.sCode {
+				t.Errorf("Expected a %d status. Got '%d'", tc.sCode, resp.StatusCode)
+			}
+			if errString != tc.err {
+				t.Errorf("Test Name: %s - Should result in: %s - Got: %s", tc.name, tc.err, errString)
+			}
+		})
 	}
 }
 
@@ -133,7 +171,7 @@ func TestMatchPath(t *testing.T) {
 	h := func(res *Response, req *Request, ctx interface{}) error {
 		return nil
 	}
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
 	s.HandlePath("/foo", h)
 	raw := "foo=bar"
 	resp := performGenericRequest(raw, "/foo", s)
@@ -148,7 +186,7 @@ func TestHandlerErrors(t *testing.T) {
 	h := func(res *Response, req *Request, ctx interface{}) error {
 		return fmt.Errorf("Serious problem")
 	}
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
 	s.HandlePath("/foo", h)
 	raw := "foo=bar"
 	performGenericRequest(raw, "/foo", s)
@@ -159,7 +197,7 @@ func TestHandlerErrors(t *testing.T) {
 }
 
 func TestMissingTimestamp(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
 	s.HandlePath("/foo", nil)
 	req := httptest.NewRequest("POST", "/foo", nil)
 	w := httptest.NewRecorder()
@@ -175,7 +213,7 @@ func TestMissingTimestamp(t *testing.T) {
 }
 
 func TestStaleTimestamp(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
 	s.HandlePath("/foo", nil)
 	req := httptest.NewRequest("POST", "/foo", nil)
 
@@ -197,7 +235,7 @@ func TestStaleTimestamp(t *testing.T) {
 }
 
 func TestInvalidSecret(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", "bad_secret", log)
+	s := NewSlackHandler("/slack", "TOKEN", "bad_secret", log, logf)
 	s.HandlePath("/foo", nil)
 	raw := "text"
 	body := bytes.NewBufferString(raw)

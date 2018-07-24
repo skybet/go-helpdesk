@@ -25,8 +25,8 @@ func main() {
 	// Connect to Slack
 	appToken := viper.GetString("app-token")
 	botToken := viper.GetString("bot-token")
-	secretToken := viper.GetString("secret-token")
-	if appToken == "" || botToken == "" || secretToken == "" {
+	signingSecret := viper.GetString("signing-secret")
+	if appToken == "" || botToken == "" || signingSecret == "" {
 		pflag.PrintDefaults()
 		return
 	}
@@ -37,8 +37,9 @@ func main() {
 	handlers.Init(sw)
 	log.Info("Connected to Slack API")
 	// Start a server to respond to callbacks from Slack
-	s := server.NewSlackHandler("/slack", appToken, secretToken, log.Errorf)
+	s := server.NewSlackHandler("/slack", appToken, signingSecret, log.Error, log.Errorf)
 	s.HandleCommand("/help-me", handlers.HelpRequest)
+	s.HandleCallback("dialog_submission", "HelpRequest", handlers.HelpCallback)
 	addr := viper.GetString("listen-address")
 	go func() {
 		if err := http.ListenAndServe(addr, s); err != nil {
