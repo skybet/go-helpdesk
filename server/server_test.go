@@ -22,12 +22,11 @@ var (
 	slackSecret = "fake_secret"
 	basePath    = "/slack"
 	errString   string
-	log         = func(msg string, i ...interface{}) {
-		if i != nil {
-			errString = fmt.Sprintf(msg, i[0])
-		} else {
-			errString = msg
-		}
+	logf        = func(msg string, i ...interface{}) {
+		errString = fmt.Sprintf(msg, i[0])
+	}
+	log = func(i ...interface{}) {
+		errString = fmt.Sprintf(i[0].(string))
 	}
 )
 
@@ -67,7 +66,7 @@ func TestMatchSlashCommand(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
 	s.HandleCommand("/bob-test", h)
 	resp := performGenericRequest(raw, basePath, s)
 
@@ -89,7 +88,7 @@ func TestUnmatchedSlashCommand(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
 	s.HandleCommand("/foobar", h)
 	resp := performGenericRequest(raw, basePath, s)
 
@@ -117,7 +116,7 @@ func TestDialogSubmissionEvent(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
 	s.HandleCallback("dialog_submission", "employee_offsite_1138b", h)
 	resp := performGenericRequest(raw, basePath, s)
 
@@ -156,7 +155,7 @@ func TestMalformedActionEvent(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(T *testing.T) {
-			s := NewSlackHandler(basePath, "TOKEN", slackSecret, log)
+			s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
 			resp := performGenericRequest(tc.raw, basePath, s)
 			if resp.StatusCode != tc.sCode {
 				t.Errorf("Expected a %d status. Got '%d'", tc.sCode, resp.StatusCode)
@@ -172,7 +171,7 @@ func TestMatchPath(t *testing.T) {
 	h := func(res *Response, req *Request, ctx interface{}) error {
 		return nil
 	}
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
 	s.HandlePath("/foo", h)
 	raw := "foo=bar"
 	resp := performGenericRequest(raw, "/foo", s)
@@ -187,7 +186,7 @@ func TestHandlerErrors(t *testing.T) {
 	h := func(res *Response, req *Request, ctx interface{}) error {
 		return fmt.Errorf("Serious problem")
 	}
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
 	s.HandlePath("/foo", h)
 	raw := "foo=bar"
 	performGenericRequest(raw, "/foo", s)
@@ -198,7 +197,7 @@ func TestHandlerErrors(t *testing.T) {
 }
 
 func TestMissingTimestamp(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
 	s.HandlePath("/foo", nil)
 	req := httptest.NewRequest("POST", "/foo", nil)
 	w := httptest.NewRecorder()
@@ -214,7 +213,7 @@ func TestMissingTimestamp(t *testing.T) {
 }
 
 func TestStaleTimestamp(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
 	s.HandlePath("/foo", nil)
 	req := httptest.NewRequest("POST", "/foo", nil)
 
@@ -236,7 +235,7 @@ func TestStaleTimestamp(t *testing.T) {
 }
 
 func TestInvalidSecret(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", "bad_secret", log)
+	s := NewSlackHandler("/slack", "TOKEN", "bad_secret", log, logf)
 	s.HandlePath("/foo", nil)
 	raw := "text"
 	body := bytes.NewBufferString(raw)
