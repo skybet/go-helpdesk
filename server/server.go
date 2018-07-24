@@ -51,7 +51,7 @@ func (r *Response) Text(code int, body string) {
 
 // SlackHandler is a function executed when a route is invoked
 type SlackHandler struct {
-	Log          LogFunc
+	Logf         LogFunc
 	Routes       []*Route
 	DefaultRoute SlackHandlerFunc
 	basePath     string
@@ -66,7 +66,7 @@ func NewSlackHandler(basePath, appToken, secretToken string, l LogFunc) *SlackHa
 			res.Text(http.StatusNotFound, "Not found")
 			return nil
 		},
-		Log:         l,
+		Logf:        l,
 		basePath:    basePath,
 		appToken:    appToken,
 		secretToken: secretToken,
@@ -106,7 +106,7 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	serve := func(f SlackHandlerFunc, ctx interface{}) {
 		if err := f(res, req, ctx); err != nil {
-			h.Log("HTTP handler error: %s", err)
+			h.Logf("HTTP handler error: %s", err)
 		}
 	}
 
@@ -142,17 +142,17 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			var payloadMap map[string]interface{}
 			payloadJSON := r.Form.Get("payload")
 			if err := json.Unmarshal([]byte(payloadJSON), &payloadMap); err != nil {
-				h.Log("%s", err)
+				h.Logf("%s", err)
 				serve(h.DefaultRoute, nil)
 				return
 			}
 			if payloadMap["type"] == nil {
-				h.Log("Error parsing Slack Event: Missing value for 'type' key")
+				h.Logf("Error parsing Slack Event: Missing value for 'type' key")
 				serve(h.DefaultRoute, nil)
 				return
 			}
 			if payloadMap["callback_id"] == nil {
-				h.Log("Error parsing Slack Event: Missing value for 'callback_id' key")
+				h.Logf("Error parsing Slack Event: Missing value for 'callback_id' key")
 				serve(h.DefaultRoute, nil)
 				return
 			}
@@ -188,21 +188,21 @@ func (h *SlackHandler) validRequest(r *http.Request) bool {
 
 	// Abort if timestamp is invalid
 	if err != nil {
-		h.Log("Invalid timestamp sent from slack", err)
+		h.Logf("Invalid timestamp sent from slack", err)
 		return false
 	}
 
 	// Abort if timestamp is stale (older than 5 minutes)
 	now := int64(time.Now().Unix())
 	if (now - slackTimestamp) > (60 * 5) {
-		h.Log("Stale timestamp sent from slack", err)
+		h.Logf("Stale timestamp sent from slack", err)
 		return false
 	}
 
 	// Abort if request body is invalid
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		h.Log("Invalid request body sent from slack", err)
+		h.Logf("Invalid request body sent from slack", err)
 		return false
 	}
 	slackBody := string(body)
@@ -214,7 +214,7 @@ func (h *SlackHandler) validRequest(r *http.Request) bool {
 	sec.Write(slackBaseStr)
 	mySig := fmt.Sprintf("v0=%s", []byte(hex.EncodeToString(sec.Sum(nil))))
 	if mySig != slackSignature {
-		h.Log("Invalid signature sent from slack, ignoring request.", nil)
+		h.Logf("Invalid signature sent from slack, ignoring request.", nil)
 		return false
 	}
 
