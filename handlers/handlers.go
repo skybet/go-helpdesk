@@ -24,7 +24,7 @@ func HelpCallback(res *server.Response, req *server.Request, ctx interface{}) er
 	if !ok {
 		return fmt.Errorf("Expected a string to be passed to the handler")
 	}
-	var d *slack.DialogCallback
+	var d slack.DialogCallback
 	err := json.Unmarshal([]byte(s), &d)
 	if err != nil {
 		return fmt.Errorf("%s", err)
