@@ -16,9 +16,13 @@ import (
 	"github.com/nlopes/slack"
 )
 
-// LogFunc is an abstraction that allows using any external logger with a Printf signature
+// LogFunc is an abstraction that allows using any external logger with a Print signature
 // Set to nil to disable logging completely
-type LogFunc func(string, ...interface{})
+type LogFunc func(...interface{})
+
+// LogfFunc is an abstraction that allows using any external logger with a Printf signature
+// Set to nil to disable logging completely
+type LogfFunc func(string, ...interface{})
 
 // SlackHandlerFunc is an http.HandlerFunc which can return an error and has a context
 // Context varies depending on the request type and is for injecting arbitrary data in
@@ -51,7 +55,8 @@ func (r *Response) Text(code int, body string) {
 
 // SlackHandler is a function executed when a route is invoked
 type SlackHandler struct {
-	Logf         LogFunc
+	Log          LogFunc
+	Logf         LogfFunc
 	Routes       []*Route
 	DefaultRoute SlackHandlerFunc
 	basePath     string
@@ -60,13 +65,14 @@ type SlackHandler struct {
 }
 
 // NewSlackHandler returns an initialised SlackHandler
-func NewSlackHandler(basePath, appToken, secretToken string, l LogFunc) *SlackHandler {
+func NewSlackHandler(basePath, appToken, secretToken string, l LogFunc, lf LogfFunc) *SlackHandler {
 	return &SlackHandler{
 		DefaultRoute: func(res *Response, req *Request, ctx interface{}) error {
 			res.Text(http.StatusNotFound, "Not found")
 			return nil
 		},
-		Logf:        l,
+		Log:         l,
+		Logf:        lf,
 		basePath:    basePath,
 		appToken:    appToken,
 		secretToken: secretToken,
@@ -147,12 +153,12 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if payloadMap["type"] == nil {
-				h.Logf("Error parsing Slack Event: Missing value for 'type' key")
+				h.Log("Error parsing Slack Event: Missing value for 'type' key")
 				serve(h.DefaultRoute, nil)
 				return
 			}
 			if payloadMap["callback_id"] == nil {
-				h.Logf("Error parsing Slack Event: Missing value for 'callback_id' key")
+				h.Log("Error parsing Slack Event: Missing value for 'callback_id' key")
 				serve(h.DefaultRoute, nil)
 				return
 			}
@@ -188,21 +194,21 @@ func (h *SlackHandler) validRequest(r *http.Request) bool {
 
 	// Abort if timestamp is invalid
 	if err != nil {
-		h.Logf("Invalid timestamp sent from slack", err)
+		h.Logf("Invalid timestamp sent from slack: %s", err)
 		return false
 	}
 
 	// Abort if timestamp is stale (older than 5 minutes)
 	now := int64(time.Now().Unix())
 	if (now - slackTimestamp) > (60 * 5) {
-		h.Logf("Stale timestamp sent from slack", err)
+		h.Logf("Stale timestamp sent from slack: %s", err)
 		return false
 	}
 
 	// Abort if request body is invalid
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		h.Logf("Invalid request body sent from slack", err)
+		h.Logf("Invalid request body sent from slack: %s", err)
 		return false
 	}
 	slackBody := string(body)
@@ -214,7 +220,7 @@ func (h *SlackHandler) validRequest(r *http.Request) bool {
 	sec.Write(slackBaseStr)
 	mySig := fmt.Sprintf("v0=%s", []byte(hex.EncodeToString(sec.Sum(nil))))
 	if mySig != slackSignature {
-		h.Logf("Invalid signature sent from slack, ignoring request.", nil)
+		h.Log("Invalid signature sent from slack, ignoring request.")
 		return false
 	}
 
