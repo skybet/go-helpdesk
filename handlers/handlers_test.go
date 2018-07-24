@@ -12,6 +12,7 @@ import (
 )
 
 func TestHelpCallback(t *testing.T) {
+	t.Skip("Test no longer relevant. Consider implementing when callback does something.")
 	tt := []struct {
 		name       string
 		jsonString interface{}
@@ -44,7 +45,9 @@ func TestHelpCallback(t *testing.T) {
 
 			err := HelpCallback(res, req, tc.jsonString)
 			if err != nil {
-				if err.Error() != tc.err.Error() {
+				if tc.err == nil {
+					t.Errorf("Test Name: %s - Should not error - Got: %s", tc.name, err)
+				} else if err.Error() != tc.err.Error() {
 					t.Errorf("Test Name: %s - Should result in: %s - Got: %s", tc.name, tc.err, err)
 				}
 			}
