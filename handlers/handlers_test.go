@@ -44,9 +44,7 @@ func TestHelpCallback(t *testing.T) {
 
 			err := HelpCallback(res, req, tc.jsonString)
 			if err != nil {
-				if err.Error() == tc.err.Error() {
-					// working as intended
-				} else {
+				if err.Error() != tc.err.Error() {
 					t.Errorf("Test Name: %s - Should result in: %s - Got: %s", tc.name, tc.err, err)
 				}
 			}
