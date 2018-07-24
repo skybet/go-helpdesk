@@ -207,7 +207,7 @@ func TestMissingTimestamp(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("Expected a 400 status. Got '%d'", resp.StatusCode)
 	}
-	if !strings.HasPrefix(errString, "Invalid timestamp sent from slack") {
+	if !strings.HasPrefix(errString, "Bad request from slack: Invalid timestamp sent from slack") {
 		t.Fatalf("Unexpected error string: %s", errString)
 	}
 }
@@ -229,7 +229,7 @@ func TestStaleTimestamp(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("Expected a 400 status. Got '%d'", resp.StatusCode)
 	}
-	if !strings.HasPrefix(errString, "Stale timestamp sent from slack") {
+	if !strings.HasPrefix(errString, "Bad request from slack: Stale timestamp sent from slack") {
 		t.Fatalf("Unexpected error string: %s", errString)
 	}
 }
@@ -249,7 +249,7 @@ func TestInvalidSecret(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("Expected a 400 status. Got '%d'", resp.StatusCode)
 	}
-	if !strings.HasPrefix(errString, "Invalid signature sent from slack") {
+	if !strings.HasPrefix(errString, "Bad request from slack: Invalid signature sent from slack") {
 		t.Fatalf("Unexpected error string: %s", errString)
 	}
 }
