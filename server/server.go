@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/nlopes/slack"
-	"github.com/nlopes/slack/slackevents"
 )
 
 // LogFunc is an abstraction that allows using any external logger with a Printf signature
@@ -179,17 +178,6 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// 404
 	serve(h.DefaultRoute, nil)
-}
-
-func (h *SlackHandler) actionEventHelper(r *http.Request) (m slackevents.MessageAction, err error) {
-	if e := r.ParseForm(); e != nil {
-		return m, fmt.Errorf("Error parsing form data: %s", e)
-	}
-	m, err = slackevents.ParseActionEvent(
-		r.Form.Get("payload"),
-		slackevents.OptionVerifyToken(&slackevents.TokenComparator{h.appToken}),
-	)
-	return
 }
 
 func (h *SlackHandler) validRequest(r *http.Request) bool {
