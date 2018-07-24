@@ -147,12 +147,12 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if payloadMap["type"] == nil {
-				h.Log("Error parsing Slack Event: %s", "Missing value for 'type' key")
+				h.Log("Error parsing Slack Event: Missing value for 'type' key")
 				serve(h.DefaultRoute, nil)
 				return
 			}
 			if payloadMap["callback_id"] == nil {
-				h.Log("Error parsing Slack Event: %s", "Missing value for 'callback_id' key")
+				h.Log("Error parsing Slack Event: Missing value for 'callback_id' key")
 				serve(h.DefaultRoute, nil)
 				return
 			}

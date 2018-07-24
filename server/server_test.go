@@ -23,7 +23,11 @@ var (
 	basePath    = "/slack"
 	errString   string
 	log         = func(msg string, i ...interface{}) {
-		errString = fmt.Sprintf(msg, i[0])
+		if i != nil {
+			errString = fmt.Sprintf(msg, i[0])
+		} else {
+			errString = msg
+		}
 	}
 )
 
