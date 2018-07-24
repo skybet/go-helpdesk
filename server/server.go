@@ -1,17 +1,7 @@
 package server
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/nlopes/slack"
 )
@@ -33,24 +23,6 @@ type SlackHandlerFunc func(res *Response, req *Request, ctx interface{}) error
 type Route struct {
 	CallbackID, Path, Command, InteractionType string
 	Handler                                    SlackHandlerFunc
-}
-
-// Request wraps http.Request
-type Request struct {
-	*http.Request
-}
-
-// Response wraps http.ResponseWriter
-type Response struct {
-	http.ResponseWriter
-}
-
-// Text is a convenience method for sending a response
-func (r *Response) Text(code int, body string) {
-	r.Header().Set("Content-Type", "text/plain")
-	r.WriteHeader(code)
-
-	io.WriteString(r, fmt.Sprintf("%s\n", body))
 }
 
 // SlackHandler is a function executed when a route is invoked
@@ -110,27 +82,27 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := &Request{Request: r}
 	res := &Response{w}
 
+	// Generic serve function which captures and logs handler errors
 	serve := func(f SlackHandlerFunc, ctx interface{}) {
 		if err := f(res, req, ctx); err != nil {
 			h.Logf("HTTP handler error: %s", err)
 		}
 	}
 
-	if !h.validRequest(r) {
-		http.Error(w, "invalid slack request", 400)
+	// If the request did not look like it came from slack, 400 and abort
+	if err := req.Validate(h.secretToken); err != nil {
+		h.Logf("Bad request from slack: %s", err)
+		res.Text(400, "invalid slack request")
 		return
 	}
 
-	// First check if path matches our BasePath
+	// First check if path matches our BasePath and has valid form data
 	// If yes then attempt to decode it to match on Command or CallbackID / InteractionType
 	// If no then match custom paths
-	if r.URL.Path == h.basePath {
-		if err := r.ParseForm(); err != nil {
-			_ = fmt.Errorf("Unable to parse request from Slack: %s", err)
-			serve(h.DefaultRoute, nil)
-			return
-		}
+	err := r.ParseForm()
+	if r.URL.Path == h.basePath && err == nil {
 
+		// Is it a slash command?
 		if r.Form.Get("command") != "" {
 			sc, _ := slack.SlashCommandParse(r)
 			// Loop through all our routes and attempt a match on the Command
@@ -141,42 +113,27 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			// It's a command but we have no handler for it - 404
-			serve(h.DefaultRoute, nil)
-			return
-		} else {
-			var payloadMap map[string]interface{}
-			payloadJSON := r.Form.Get("payload")
-			if err := json.Unmarshal([]byte(payloadJSON), &payloadMap); err != nil {
-				h.Logf("%s", err)
-				serve(h.DefaultRoute, nil)
-				return
-			}
-			if payloadMap["type"] == nil {
-				h.Log("Error parsing Slack Event: Missing value for 'type' key")
-				serve(h.DefaultRoute, nil)
-				return
-			}
-			if payloadMap["callback_id"] == nil {
-				h.Log("Error parsing Slack Event: Missing value for 'callback_id' key")
-				serve(h.DefaultRoute, nil)
-				return
-			}
-			// Loop through all our routes and attempt a match on the InteractionType / CallbackID pair
-			for _, rt := range h.Routes {
-				if payloadMap["type"] == rt.InteractionType && payloadMap["callback_id"] == rt.CallbackID {
-					// Send the payloadJSON as context
-					serve(rt.Handler, payloadJSON)
-					return
+		}
+
+		// Does it have a valid callback payload? - If so, it's a callback
+		payload, err := req.CallbackPayload()
+		if err != nil {
+			h.Logf("Error parsing payload: %s", err)
+		}
+		// Loop through all our routes and attempt a match on the InteractionType / CallbackID pair
+		for _, rt := range h.Routes {
+			if payload.MatchRoute(rt) {
+				// Send the payload as context
+				t, err := payload.Mutate()
+				if err != nil {
+					h.Logf("Error mutating %s payload: %s", payload["type"], err)
 				}
+				serve(rt.Handler, t)
+				return
 			}
 		}
-		// Its path is the basepath, but we dont have a matching command or
-		// action handler for it - 404
-		serve(h.DefaultRoute, nil)
-		return
 	} else {
-		// Loop through all our routes and attempt a match on the path
+		// If nothing else works, loop through all our routes and attempt a match on the path
 		for _, rt := range h.Routes {
 			if rt.Path == r.URL.Path {
 				serve(rt.Handler, nil)
@@ -184,47 +141,7 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// 404
+
+	// No matches - 404
 	serve(h.DefaultRoute, nil)
-}
-
-func (h *SlackHandler) validRequest(r *http.Request) bool {
-	slackTimestampHeader := r.Header.Get("X-Slack-Request-Timestamp")
-	slackTimestamp, err := strconv.ParseInt(slackTimestampHeader, 10, 64)
-
-	// Abort if timestamp is invalid
-	if err != nil {
-		h.Logf("Invalid timestamp sent from slack: %s", err)
-		return false
-	}
-
-	// Abort if timestamp is stale (older than 5 minutes)
-	now := int64(time.Now().Unix())
-	if (now - slackTimestamp) > (60 * 5) {
-		h.Logf("Stale timestamp sent from slack: %s", err)
-		return false
-	}
-
-	// Abort if request body is invalid
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		h.Logf("Invalid request body sent from slack: %s", err)
-		return false
-	}
-	slackBody := string(body)
-
-	// Abort if the signature does not correspond to the signing secret
-	slackBaseStr := []byte(fmt.Sprintf("v0:%d:%s", slackTimestamp, slackBody))
-	slackSignature := r.Header.Get("X-Slack-Signature")
-	sec := hmac.New(sha256.New, []byte(h.secretToken))
-	sec.Write(slackBaseStr)
-	mySig := fmt.Sprintf("v0=%s", []byte(hex.EncodeToString(sec.Sum(nil))))
-	if mySig != slackSignature {
-		h.Log("Invalid signature sent from slack, ignoring request.")
-		return false
-	}
-
-	// All good! The request is valid
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-	return true
 }
