@@ -120,7 +120,9 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If no then match custom paths
 	if r.URL.Path == h.basePath {
 		if err := r.ParseForm(); err != nil {
-			fmt.Errorf("Unable to parse request from Slack: %s", err)
+			_ = fmt.Errorf("Unable to parse request from Slack: %s", err)
+			serve(h.DefaultRoute, nil)
+			return
 		}
 
 		if r.Form.Get("command") != "" {
