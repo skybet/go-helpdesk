@@ -28,10 +28,10 @@ services:
       - CAP_DAC_OVERRIDE
     net: host
     env:
-      - HELP_SIGNING_SECRET="xxxyyyzzz"
-      - HELP_BOT_TOKEN="xxxyyyzzz"
-      - HELP_APP_TOKEN="xxxyyyzzz"
-      - HELP_LISTEN_ADDRESS="0.0.0.0:4390"
+      - HELP_SIGNING_SECRET=xxxyyyzzz
+      - HELP_BOT_TOKEN=xxxyyyzzz
+      - HELP_APP_TOKEN=xxxyyyzzz
+      - HELP_LISTEN_ADDRESS=0.0.0.0:4390
     binds:
       - /etc/resolv.conf:/etc/resolv.conf
 trust:
