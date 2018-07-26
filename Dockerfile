@@ -9,8 +9,11 @@ RUN go test -v ./...; \
 
 
 FROM alpine
+
 ENV BUILDROOT /go/src/github.com/skybet/go-helpdesk
 COPY --from=builder $BUILDROOT/go-helpdesk /bin
+
+RUN apk add -U ca-certificates
 
 EXPOSE 4390
 

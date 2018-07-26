@@ -43,6 +43,24 @@ _Nb._ Flags take precedence over environment variables.
 
 `go-helpdesk` requires three different tokens to connect to Slack. An app token is provided when creating a new slash command and a bot token is required to send messages etc. A signing secret for your app is also required, to enable us to ensure that requests are legitimate.(_TODO: expand this_)
 
+### Deployment
+
+An example [LinuxKit](https://github.com/linuxkit/linuxkit) configuration is included which is capable of creating a minimal OS image and running it, for example, on AWS.
+
+You will want to edit/make a copy of this file for your own use and add you Slack tokens and secret. Remember not to commit these!
+
+Refer to the LinuxKit documentation for full usage. However you can run this locally with just a few commands.
+
+```
+go get -u github.com/linuxkit/linuxkit/src/cmd/linuxkit
+linuxkit build linuxkit-example.yml
+
+# Using QEMU
+linuxkit run qemu linuxkit-example
+# HyperKit (OSX)
+linuxkit run hyperkit linuxkit-example
+```
+
 ## Library Usage
 
 Check the example `main.go` (_TODO: write a proper guide once API is stable_)
