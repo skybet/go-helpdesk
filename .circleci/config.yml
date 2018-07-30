@@ -13,3 +13,8 @@ jobs:
       - run: go-acc -o coverage.txt github.com/skybet/go-helpdesk/wrapper github.com/skybet/go-helpdesk/server github.com/skybet/go-helpdesk/handlers
       - run: go test -v ./...
       - run: goveralls -service=circle-ci -coverprofile=coverage.txt -repotoken=$COVERALLS_REPO_TOKEN
+      - setup_remote_docker
+      - run: docker build -t adampointer83/go-helpdesk:$CIRCLE_BRANCH .
+      - run: docker login -u $DOCKER_USER -p $DOCKER_PASS
+      - run: docker push adampointer83/go-helpdesk:$CIRCLE_BRANCH
+         
