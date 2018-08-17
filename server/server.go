@@ -2,7 +2,7 @@ package server
 
 import (
 	"net/http"
-
+	"strings"
 	"github.com/nlopes/slack"
 )
 
@@ -100,8 +100,7 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If yes then attempt to decode it to match on Command or CallbackID / InteractionType
 	// If no then match custom paths
 	err := r.ParseForm()
-	if r.URL.Path == h.basePath && err == nil {
-
+  	if strings.HasPrefix(r.URL.Path, h.basePath) && err == nil {
 		// Is it a slash command?
 		if r.Form.Get("command") != "" {
 			sc, _ := slack.SlashCommandParse(r)
