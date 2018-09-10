@@ -15,8 +15,8 @@ type SlackWrapper interface {
 
 // Slack is a wrapper around the Slack App and RTM APIs
 type Slack struct {
-	app *slack.Client
-	bot *slackbot.Bot
+	App *slack.Client
+	Bot *slackbot.Bot
 }
 
 // New takes an app and bot token, verifies the connection and
@@ -34,14 +34,14 @@ func New(appToken, botToken string) (*Slack, error) {
 	if _, err = slackBot.Client.AuthTest(); err != nil {
 		return nil, err
 	}
-	return &Slack{app: slackApp, bot: slackBot}, nil
+	return &Slack{App: slackApp, Bot: slackBot}, nil
 }
 
 // OpenDialog opens a Dialog inside Slack
 func (s *Slack) OpenDialog(triggerID string, dialog slack.Dialog) error {
-	err := s.app.OpenDialog(triggerID, dialog)
+	err := s.App.OpenDialog(triggerID, dialog)
 	if err != nil {
-		fmt.Errorf("error opening dialog. %s", err)
+		fmt.Printf("error opening dialog. %s\n", err)
 		return err
 	}
 	return err
@@ -49,6 +49,6 @@ func (s *Slack) OpenDialog(triggerID string, dialog slack.Dialog) error {
 
 // SendMessage posts a message to Slack that is visible to everyone in the channel
 func (s *Slack) SendMessage(message, channel string) {
-	msg := s.bot.RTM.NewOutgoingMessage(message, fmt.Sprintf("#%s", channel))
-	s.bot.RTM.SendMessage(msg)
+	msg := s.Bot.RTM.NewOutgoingMessage(message, fmt.Sprintf("#%s", channel))
+	s.Bot.RTM.SendMessage(msg)
 }
