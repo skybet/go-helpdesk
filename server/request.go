@@ -120,6 +120,10 @@ func (c CallbackPayload) Mutate() (interface{}, error) {
 		var result slack.DialogCallback
 		err := mapstructure.Decode(c, &result)
 		return &result, err
+	case "dialog_suggestion":
+		var result slack.DialogSuggestionCallback
+		err := mapstructure.Decode(c, &result)
+		return &result, err
 	default:
 		return c, nil
 	}
