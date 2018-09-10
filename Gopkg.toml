@@ -30,8 +30,8 @@
   name = "github.com/adampointer/go-slackbot"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/nlopes/slack"
+  version = "0.3.0"
 
 [prune]
   go-tests = true
