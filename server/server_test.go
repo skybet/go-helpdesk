@@ -19,6 +19,7 @@ import (
 
 var (
 	slackSecret = "fake_secret"
+	dnHeader    = "dummy-dn"
 	basePath    = "/slack"
 	errString   string
 	logf        = func(msg string, i ...interface{}) {
@@ -41,6 +42,9 @@ func addSlackHeaders(body string, r *http.Request) {
 	h.Write(slackBaseStr)
 	mySig := fmt.Sprintf("v0=%s", []byte(hex.EncodeToString(h.Sum(nil))))
 	r.Header.Set("X-Slack-Signature", mySig)
+
+	// Add dummy mutual TLS header
+	r.Header.Set(dnHeader, "CN=platform-tls-client.slack.com,O=Slack Technologies")
 }
 
 func performGenericRequest(raw, path string, s *SlackHandler) *http.Response {
@@ -65,7 +69,7 @@ func TestMatchSlashCommand(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, &dnHeader, log, logf)
 	s.HandleCommand("/bob-test", h)
 	resp := performGenericRequest(raw, basePath, s)
 
@@ -87,7 +91,7 @@ func TestUnmatchedSlashCommand(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, &dnHeader, log, logf)
 	s.HandleCommand("/foobar", h)
 	resp := performGenericRequest(raw, basePath, s)
 
@@ -110,7 +114,7 @@ func TestDialogSubmissionEvent(t *testing.T) {
 		}
 		return nil
 	}
-	s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
+	s := NewSlackHandler(basePath, "TOKEN", slackSecret, &dnHeader, log, logf)
 	s.HandleCallback("dialog_submission", "employee_offsite_1138b", h)
 	resp := performGenericRequest(raw, basePath, s)
 
@@ -131,7 +135,7 @@ func TestMalformedActionEvent(t *testing.T) {
 			"Fail on invalid JSON",
 			"payload=ssion%22%3A%20%7B%22name%22%3A%20%22Sigourney%20Dreamweaver%22%2C%22email%22%3A%20%22sigdre%40example.com%22%2C%22phone%22%3A%20%22%2B1%20800-555-1212%22%2C%22meal%22%3A%20%22burrito%22%2C%22comment%22%3A%20%22No%20sour%20cream%20please%22%2C%22team_channel%22%3A%20%22C0LFFBKPB%22%2C%22who_should_sing%22%3A%20%22U0MJRG1AL%22%7D%2C%22callback_id%22%3A%20%22employee_offsite_1138b%22%2C%22team%22%3A%20%7B%22id%22%3A%20%22T1ABCD2E12%22%2C%22domain%22%3A%20%22coverbands%22%7D%2C%22user%22%3A%20%7B%22id%22%3A%20%22W12A3BCDEF%22%2C%22name%22%3A%20%22dreamweaver%22%7D%2C%22channel%22%3A%20%7B%22id%22%3A%20%22C1AB2C3DE%22%2C%22name%22%3A%20%22coverthon-1999%22%7D%2C%22action_ts%22%3A%20%22936893340.702759%22%2C%22token%22%3A%20%22TOKEN%22%2C%22response_url%22%3A%20%22https%3A%2F%2Fhooks.slack.com%2Fapp%2FT012AB0A1%2F123456789%2FJpmK0yzoZDeRiqfeduTBYXWQ%22",
 			404,
-			"Error parsing payload: Error parsing payload JSON: invalid character 's' looking for beginning of value",
+			"Error parsing payload: error parsing payload JSON: invalid character 's' looking for beginning of value",
 		},
 		{
 			"Fail on missing value for 'type'",
@@ -149,7 +153,7 @@ func TestMalformedActionEvent(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(T *testing.T) {
-			s := NewSlackHandler(basePath, "TOKEN", slackSecret, log, logf)
+			s := NewSlackHandler(basePath, "TOKEN", slackSecret, &dnHeader, log, logf)
 			resp := performGenericRequest(tc.raw, basePath, s)
 			if resp.StatusCode != tc.sCode {
 				t.Errorf("Expected a %d status. Got '%d'", tc.sCode, resp.StatusCode)
@@ -165,7 +169,7 @@ func TestMatchPath(t *testing.T) {
 	h := func(res *Response, req *Request, ctx interface{}) error {
 		return nil
 	}
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, &dnHeader, log, logf)
 	s.HandlePath("/foo", h)
 	raw := "foo=bar"
 	resp := performGenericRequest(raw, "/foo", s)
@@ -178,20 +182,20 @@ func TestMatchPath(t *testing.T) {
 
 func TestHandlerErrors(t *testing.T) {
 	h := func(res *Response, req *Request, ctx interface{}) error {
-		return fmt.Errorf("Serious problem")
+		return fmt.Errorf("serious problem")
 	}
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, &dnHeader, log, logf)
 	s.HandlePath("/foo", h)
 	raw := "foo=bar"
 	performGenericRequest(raw, "/foo", s)
 
-	if errString != "HTTP handler error: Serious problem" {
+	if errString != "HTTP handler error: serious problem" {
 		t.Fatalf("Unexpected error string: %s", errString)
 	}
 }
 
 func TestMissingTimestamp(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, nil, log, logf)
 	s.HandlePath("/foo", nil)
 	req := httptest.NewRequest("POST", "/foo", nil)
 	w := httptest.NewRecorder()
@@ -201,13 +205,13 @@ func TestMissingTimestamp(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("Expected a 400 status. Got '%d'", resp.StatusCode)
 	}
-	if !strings.HasPrefix(errString, "Bad request from slack: Invalid timestamp sent from slack") {
+	if !strings.HasPrefix(errString, "Bad request from slack: invalid timestamp sent from slack") {
 		t.Fatalf("Unexpected error string: %s", errString)
 	}
 }
 
 func TestStaleTimestamp(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", slackSecret, log, logf)
+	s := NewSlackHandler("/slack", "TOKEN", slackSecret, nil, log, logf)
 	s.HandlePath("/foo", nil)
 	req := httptest.NewRequest("POST", "/foo", nil)
 
@@ -223,13 +227,13 @@ func TestStaleTimestamp(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("Expected a 400 status. Got '%d'", resp.StatusCode)
 	}
-	if !strings.HasPrefix(errString, "Bad request from slack: Stale timestamp sent from slack") {
+	if !strings.HasPrefix(errString, "Bad request from slack: stale timestamp sent from slack") {
 		t.Fatalf("Unexpected error string: %s", errString)
 	}
 }
 
 func TestInvalidSecret(t *testing.T) {
-	s := NewSlackHandler("/slack", "TOKEN", "bad_secret", log, logf)
+	s := NewSlackHandler("/slack", "TOKEN", "bad_secret", &dnHeader, log, logf)
 	s.HandlePath("/foo", nil)
 	raw := "text"
 	body := bytes.NewBufferString(raw)
@@ -243,7 +247,29 @@ func TestInvalidSecret(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("Expected a 400 status. Got '%d'", resp.StatusCode)
 	}
-	if !strings.HasPrefix(errString, "Bad request from slack: Invalid signature sent from slack") {
+	if !strings.HasPrefix(errString, "Bad request from slack: invalid signature sent from slack") {
 		t.Fatalf("Unexpected error string: %s", errString)
 	}
 }
+
+func TestInvalidDN(t *testing.T) {
+	dnHeader := "slack-dn"
+	s := NewSlackHandler("/slack", "TOKEN", "bad_secret", &dnHeader, log, logf)
+	s.HandlePath("/foo", nil)
+
+	req := httptest.NewRequest("POST", "/foo", nil)
+	req.Header.Set(dnHeader, "not.slack.com")
+
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != 400 {
+		t.Fatalf("Expected a 400 status. Got '%d'", resp.StatusCode)
+	}
+	if !strings.HasPrefix(errString, "Bad request from slack: invalid CN in DN header") {
+		t.Fatalf("Unexpected error string: %s", errString)
+	}
+}
+
+

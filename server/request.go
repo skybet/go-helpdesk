@@ -16,6 +16,7 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/nlopes/slack"
+	"regexp"
 )
 
 // Request wraps http.Request
@@ -25,25 +26,41 @@ type Request struct {
 }
 
 // Validate the request comes from Slack
-func (r *Request) Validate(secret string) error {
+func (r *Request) Validate(secret string, dnHeader *string) error {
+	// If a dnHeader has been provided, check that the header contains the slack CN
+	if dnHeader != nil {
+		slackDNHeader := r.Header.Get(*dnHeader)
+		dnError := fmt.Errorf("invalid CN in DN header")
+
+		r, _ := regexp.Compile("CN=(.*?),")
+		cn := r.FindStringSubmatch(slackDNHeader)
+		if len(cn) != 2 {		// It should match the CN exactly one, and contain the CN value as a group
+			return dnError
+		}
+
+		if cn[1] != "platform-tls-client.slack.com" {
+			return dnError
+		}
+	}
+
 	slackTimestampHeader := r.Header.Get("X-Slack-Request-Timestamp")
 	slackTimestamp, err := strconv.ParseInt(slackTimestampHeader, 10, 64)
 
 	// Abort if timestamp is invalid
 	if err != nil {
-		return fmt.Errorf("Invalid timestamp sent from slack: %s", err)
+		return fmt.Errorf("invalid timestamp sent from slack: %s", err)
 	}
 
 	// Abort if timestamp is stale (older than 5 minutes)
 	now := int64(time.Now().Unix())
 	if (now - slackTimestamp) > (60 * 5) {
-		return fmt.Errorf("Stale timestamp sent from slack: %s", err)
+		return fmt.Errorf("stale timestamp sent from slack: %s", err)
 	}
 
 	// Abort if request body is invalid
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return fmt.Errorf("Invalid request body sent from slack: %s", err)
+		return fmt.Errorf("invalid request body sent from slack: %s", err)
 	}
 	slackBody := string(body)
 
@@ -54,7 +71,7 @@ func (r *Request) Validate(secret string) error {
 	sec.Write(slackBaseStr)
 	mySig := fmt.Sprintf("v0=%s", []byte(hex.EncodeToString(sec.Sum(nil))))
 	if mySig != slackSignature {
-		return errors.New("Invalid signature sent from slack")
+		return errors.New("invalid signature sent from slack")
 	}
 	// All good! The request is valid
 	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
@@ -78,10 +95,10 @@ func (r *Request) parsePayload() error {
 	var payload CallbackPayload
 	j := r.Form.Get("payload")
 	if j == "" {
-		return errors.New("Empty payload")
+		return errors.New("empty payload")
 	}
 	if err := json.Unmarshal([]byte(j), &payload); err != nil {
-		return fmt.Errorf("Error parsing payload JSON: %s", err)
+		return fmt.Errorf("error parsing payload JSON: %s", err)
 	}
 	r.payload = payload
 	return nil
