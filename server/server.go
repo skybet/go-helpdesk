@@ -34,10 +34,11 @@ type SlackHandler struct {
 	basePath     string
 	appToken     string
 	secretToken  string
+	dnHeader     *string	// Used for Mutual TLS
 }
 
 // NewSlackHandler returns an initialised SlackHandler
-func NewSlackHandler(basePath, appToken, secretToken string, l LogFunc, lf LogfFunc) *SlackHandler {
+func NewSlackHandler(basePath, appToken, secretToken string, dnHeader *string, l LogFunc, lf LogfFunc) *SlackHandler {
 	return &SlackHandler{
 		DefaultRoute: func(res *Response, req *Request, ctx interface{}) error {
 			res.Text(http.StatusNotFound, "Not found")
@@ -48,6 +49,7 @@ func NewSlackHandler(basePath, appToken, secretToken string, l LogFunc, lf LogfF
 		basePath:    basePath,
 		appToken:    appToken,
 		secretToken: secretToken,
+		dnHeader: dnHeader,
 	}
 }
 
@@ -90,7 +92,7 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If the request did not look like it came from slack, 400 and abort
-	if err := req.Validate(h.secretToken); err != nil {
+	if err := req.Validate(h.secretToken, h.dnHeader); err != nil {
 		h.Logf("Bad request from slack: %s", err)
 		res.Text(400, "invalid slack request")
 		return
