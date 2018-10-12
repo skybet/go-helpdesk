@@ -5,6 +5,7 @@ import (
 	"github.com/nlopes/slack"
 
 	"fmt"
+	slack2 "github.com/essentialkaos/slack"
 )
 
 // SlackWrapper is a interface for Slack to enable test double injection
@@ -49,6 +50,6 @@ func (s *Slack) OpenDialog(triggerID string, dialog slack.Dialog) error {
 
 // SendMessage posts a message to Slack that is visible to everyone in the channel
 func (s *Slack) SendMessage(message, channel string) {
-	msg := s.Bot.RTM.NewOutgoingMessage(message, fmt.Sprintf("#%s", channel))
-	s.Bot.RTM.SendMessage(msg)
+	p := slack2.PostMessageParameters{}
+	s.Bot.Client.PostMessage(fmt.Sprintf("#%s", channel), message, p)
 }
