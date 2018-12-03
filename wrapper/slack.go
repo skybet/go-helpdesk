@@ -1,11 +1,10 @@
 package wrapper
 
 import (
-	"github.com/adampointer/go-slackbot"
+	"github.com/BeepBoopHQ/go-slackbot"
 	"github.com/nlopes/slack"
 
 	"fmt"
-	slack2 "github.com/essentialkaos/slack"
 )
 
 // SlackWrapper is a interface for Slack to enable test double injection
@@ -50,6 +49,6 @@ func (s *Slack) OpenDialog(triggerID string, dialog slack.Dialog) error {
 
 // SendMessage posts a message to Slack that is visible to everyone in the channel
 func (s *Slack) SendMessage(message, channel string) {
-	p := slack2.PostMessageParameters{}
+	p := slack.PostMessageParameters{}
 	s.Bot.Client.PostMessage(fmt.Sprintf("#%s", channel), message, p)
 }
