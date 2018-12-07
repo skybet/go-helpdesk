@@ -35,7 +35,7 @@ func HelpRequest(res *server.Response, req *server.Request, ctx interface{}) err
 	if !ok {
 		return fmt.Errorf("Expected a slack.SlashCommand to be passed to the handler")
 	}
-	descriptionElement := slack.DialogTextElement{
+	descriptionElement := slack.DialogInput{
 		Type:        "text",
 		Label:       "Help Request Description",
 		Placeholder: "Describe what you would like help with ...",
@@ -47,7 +47,7 @@ func HelpRequest(res *server.Response, req *server.Request, ctx interface{}) err
 	}
 
 	dialog := slack.Dialog{
-		CallbackId:     "HelpRequest",
+		CallbackID:     "HelpRequest",
 		Title:          "Request Help",
 		SubmitLabel:    "Create",
 		NotifyOnCancel: true,

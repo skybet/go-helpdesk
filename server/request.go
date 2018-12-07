@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/nlopes/slack"
 	"regexp"
 )
@@ -22,7 +21,7 @@ import (
 // Request wraps http.Request
 type Request struct {
 	*http.Request
-	payload CallbackPayload
+	payload *slack.InteractionCallback
 }
 
 // Validate the request comes from Slack
@@ -79,20 +78,27 @@ func (r *Request) Validate(secret string, dnHeader *string) error {
 }
 
 // CallbackPayload returns the parsed payload if it exists and is valid
-func (r *Request) CallbackPayload() (CallbackPayload, error) {
-	if r.payload == nil {
-		if err := r.parsePayload(); err != nil {
-			return nil, err
-		}
-		if err := r.payload.Validate(); err != nil {
-			return nil, err
-		}
+func (r *Request) CallbackPayload() (*slack.InteractionCallback, error) {
+	if err := r.parsePayload(); err != nil {
+		return nil, err
 	}
+
+	var errs []string
+	if r.payload.Type == "" {
+		errs = append(errs, "Missing value for 'type' key")
+	}
+	if r.payload.CallbackID == "" {
+		errs = append(errs, "Missing value for 'callback_id' key")
+	}
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("%s", strings.Join(errs, ", "))
+	}
+
 	return r.payload, nil
 }
 
 func (r *Request) parsePayload() error {
-	var payload CallbackPayload
+	var payload slack.InteractionCallback
 	j := r.Form.Get("payload")
 	if j == "" {
 		return errors.New("empty payload")
@@ -100,48 +106,6 @@ func (r *Request) parsePayload() error {
 	if err := json.Unmarshal([]byte(j), &payload); err != nil {
 		return fmt.Errorf("error parsing payload JSON: %s", err)
 	}
-	r.payload = payload
+	r.payload = &payload
 	return nil
-}
-
-// CallbackPayload represents the data sent by Slack on a user initiated event
-type CallbackPayload map[string]interface{}
-
-// Validate the payload
-func (c CallbackPayload) Validate() error {
-	var errs []string
-	if c["type"] == nil {
-		errs = append(errs, "Missing value for 'type' key")
-	}
-	if c["callback_id"] == nil {
-		errs = append(errs, "Missing value for 'callback_id' key")
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("%s", strings.Join(errs, ", "))
-	}
-	return nil
-}
-
-// MatchRoute determines if we can route this request based on the payload
-func (c CallbackPayload) MatchRoute(r *Route) bool {
-	if c["type"] == r.InteractionType && c["callback_id"] == r.CallbackID {
-		return true
-	}
-	return false
-}
-
-// Mutate the payload into a go type matching it's type field
-func (c CallbackPayload) Mutate() (interface{}, error) {
-	switch c["type"] {
-	case "dialog_submission":
-		var result slack.DialogCallback
-		err := mapstructure.Decode(c, &result)
-		return &result, err
-	case "dialog_suggestion":
-		var result slack.DialogSuggestionCallback
-		err := mapstructure.Decode(c, &result)
-		return &result, err
-	default:
-		return c, nil
-	}
 }

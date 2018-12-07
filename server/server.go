@@ -122,15 +122,13 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.Logf("Error parsing payload: %s", err)
 		}
 		// Loop through all our routes and attempt a match on the InteractionType / CallbackID pair
-		for _, rt := range h.Routes {
-			if payload.MatchRoute(rt) {
-				// Send the payload as context
-				t, err := payload.Mutate()
-				if err != nil {
-					h.Logf("Error mutating %s payload: %s", payload["type"], err)
+		if payload != nil {
+			for _, rt := range h.Routes {
+				if string(payload.Type) == rt.InteractionType && payload.CallbackID == rt.CallbackID {
+					// Send the payload as context
+					serve(rt.Handler, payload)
+					return
 				}
-				serve(rt.Handler, t)
-				return
 			}
 		}
 	} else {
