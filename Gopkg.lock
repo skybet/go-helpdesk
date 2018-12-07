@@ -2,14 +2,6 @@
 
 
 [[projects]]
-  branch = "master"
-  digest = "1:a9d482d63f34e6e52e7e051801d2b04f6c0ceaf8072d97fa4a771560af1ebc5b"
-  name = "github.com/BeepBoopHQ/go-slackbot"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "58027c0d5238a0604305652ea526b3c18a7cead1"
-
-[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -69,12 +61,15 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:ace662a36243b5cdc2f71e654175dc192f903fafbf3411a95bc910c1cad53ce7"
+  branch = "master"
+  digest = "1:60f73a5ecf905d2a16865070a13053e913ef249aa0f044b24763d542f3fad455"
   name = "github.com/nlopes/slack"
-  packages = ["."]
+  packages = [
+    ".",
+    "slackutilsx",
+  ]
   pruneopts = "UT"
-  revision = "0db1d5eae1116bf7c8ed96c6749acfbf4daaec3e"
-  version = "v0.3.0"
+  revision = "38ac5e8c495bc1d4d299c6a14930376f32145eb8"
 
 [[projects]]
   digest = "1:95741de3af260a92cc5c7f3f3061e85273f5a81b5db20d4bd68da74bd521675e"
@@ -83,6 +78,14 @@
   pruneopts = "UT"
   revision = "c01d1270ff3e442a8a57cddc1c92dc1138598194"
   version = "v1.2.0"
+
+[[projects]]
+  digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
 
 [[projects]]
   digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
@@ -172,14 +175,6 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:76ee51c3f468493aff39dbacc401e8831fbb765104cbf613b89bef01cf4bad70"
-  name = "golang.org/x/net"
-  packages = ["context"]
-  pruneopts = "UT"
-  revision = "161cd47e91fd58ac17490ef4d742dc98bb4cf60e"
-
-[[projects]]
-  branch = "master"
   digest = "1:374fc90fcb026e9a367e3fad29e988e5dd944b68ca3f24a184d77abc5307dda4"
   name = "golang.org/x/sys"
   packages = [
@@ -216,7 +211,6 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/BeepBoopHQ/go-slackbot",
     "github.com/mitchellh/mapstructure",
     "github.com/nlopes/slack",
     "github.com/sirupsen/logrus",
