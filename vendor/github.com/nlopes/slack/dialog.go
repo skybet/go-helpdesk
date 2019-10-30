@@ -3,7 +3,7 @@ package slack
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"strings"
 )
 
 // InputType is the type of the dialog input type
@@ -14,7 +14,7 @@ const (
 	InputTypeText InputType = "text"
 	// InputTypeTextArea textarea input
 	InputTypeTextArea InputType = "textarea"
-	// InputTypeSelect textfield input
+	// InputTypeSelect select menus input
 	InputTypeSelect InputType = "select"
 )
 
@@ -25,6 +25,7 @@ type DialogInput struct {
 	Name        string    `json:"name"`
 	Placeholder string    `json:"placeholder"`
 	Optional    bool      `json:"optional"`
+	Hint        string    `json:"hint"`
 }
 
 // DialogTrigger ...
@@ -68,6 +69,17 @@ type DialogResponseMetadata struct {
 	Messages []string `json:"messages"`
 }
 
+// DialogInputValidationError is an error when user inputs incorrect value to form from within a dialog
+type DialogInputValidationError struct {
+	Name  string `json:"name"`
+	Error string `json:"error"`
+}
+
+// DialogInputValidationErrors lists the name of field and that error messages
+type DialogInputValidationErrors struct {
+	Errors []DialogInputValidationError `json:"errors"`
+}
+
 // OpenDialog opens a dialog window where the triggerID originated from.
 // EXPERIMENTAL: dialog functionality is currently experimental, api is not considered stable.
 func (api *Client) OpenDialog(triggerID string, dialog Dialog) (err error) {
@@ -78,7 +90,7 @@ func (api *Client) OpenDialog(triggerID string, dialog Dialog) (err error) {
 // EXPERIMENTAL: dialog functionality is currently experimental, api is not considered stable.
 func (api *Client) OpenDialogContext(ctx context.Context, triggerID string, dialog Dialog) (err error) {
 	if triggerID == "" {
-		return errors.New("received empty parameters")
+		return ErrParametersMissing
 	}
 
 	req := DialogTrigger{
@@ -92,9 +104,14 @@ func (api *Client) OpenDialogContext(ctx context.Context, triggerID string, dial
 	}
 
 	response := &DialogOpenResponse{}
-	endpoint := APIURL + "dialog.open"
+	endpoint := api.endpoint + "dialog.open"
 	if err := postJSON(ctx, api.httpclient, endpoint, api.token, encoded, response, api); err != nil {
 		return err
+	}
+
+	if len(response.DialogResponseMetadata.Messages) > 0 {
+		response.Ok = false
+		response.Error += "\n" + strings.Join(response.DialogResponseMetadata.Messages, "\n")
 	}
 
 	return response.Err()
