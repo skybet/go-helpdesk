@@ -25,8 +25,8 @@
 #   unused-packages = true
 
 [[constraint]]
-  branch = "master"
   name = "github.com/nlopes/slack"
+  version = "0.6.0"
 
 [prune]
   go-tests = true

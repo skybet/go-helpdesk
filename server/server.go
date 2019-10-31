@@ -1,9 +1,12 @@
 package server
 
 import (
+	"encoding/json"
+	"github.com/nlopes/slack"
+	"github.com/nlopes/slack/slackevents"
+	"io/ioutil"
 	"net/http"
 	"strings"
-	"github.com/nlopes/slack"
 )
 
 // LogFunc is an abstraction that allows using any external logger with a Print signature
@@ -21,14 +24,16 @@ type SlackHandlerFunc func(res *Response, req *Request, ctx interface{}) error
 
 // Route is a handler which is invoked when a path is matched
 type Route struct {
-	CallbackID, Path, Command, InteractionType string
-	Handler                                    SlackHandlerFunc
+	CallbackID, Path, Command, InteractionType, EventType string
+	Handler                                               SlackHandlerFunc
 }
 
 // SlackHandler is a function executed when a route is invoked
 type SlackHandler struct {
 	Log          LogFunc
 	Logf         LogfFunc
+	ErrorLog     LogFunc
+	ErrorLogf    LogfFunc
 	Routes       []*Route
 	DefaultRoute SlackHandlerFunc
 	basePath     string
@@ -38,7 +43,7 @@ type SlackHandler struct {
 }
 
 // NewSlackHandler returns an initialised SlackHandler
-func NewSlackHandler(basePath, appToken, secretToken string, dnHeader *string, l LogFunc, lf LogfFunc) *SlackHandler {
+func NewSlackHandler(basePath, appToken, secretToken string, dnHeader *string, l LogFunc, lf LogfFunc, el LogFunc, elf LogfFunc) *SlackHandler {
 	return &SlackHandler{
 		DefaultRoute: func(res *Response, req *Request, ctx interface{}) error {
 			res.Text(http.StatusNotFound, "Not found")
@@ -46,18 +51,26 @@ func NewSlackHandler(basePath, appToken, secretToken string, dnHeader *string, l
 		},
 		Log:         l,
 		Logf:        lf,
+		ErrorLog:    el,
+		ErrorLogf:   elf,
 		basePath:    basePath,
 		appToken:    appToken,
 		secretToken: secretToken,
-		dnHeader: dnHeader,
+		dnHeader:    dnHeader,
 	}
 }
 
-// HandleCallback registers a handler to be executed when a specific
+// HandleInteractionCallback registers a handler to be executed when a specific
 // InteractionType / CallbackID pair is present in the request
-// payload sent to the BasePath
-func (h *SlackHandler) HandleCallback(it, cid string, f SlackHandlerFunc) {
+func (h *SlackHandler) HandleInteractionCallback(it, cid string, f SlackHandlerFunc) {
 	r := &Route{Path: h.basePath, CallbackID: cid, InteractionType: it, Handler: f}
+	h.handle(r)
+}
+
+// HandleEventCallback registers a handler to be executed when a specific
+// EventsAPICallbackEvent type is present in the request
+func (h *SlackHandler) HandleEventCallback(et string, f SlackHandlerFunc) {
+	r := &Route{Path: h.basePath, EventType: et, Handler: f}
 	h.handle(r)
 }
 
@@ -87,25 +100,45 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Generic serve function which captures and logs handler errors
 	serve := func(f SlackHandlerFunc, ctx interface{}) {
 		if err := f(res, req, ctx); err != nil {
-			h.Logf("HTTP handler error: %s", err)
+			h.ErrorLogf("HTTP handler error: %s", err)
 		}
 	}
 
 	// If the request did not look like it came from slack, 400 and abort
 	if err := req.Validate(h.secretToken, h.dnHeader); err != nil {
-		h.Logf("Bad request from slack: %s", err)
+		h.ErrorLogf("Bad request from slack: %s", err)
 		res.Text(400, "invalid slack request")
 		return
 	}
 
 	// First check if path matches our BasePath and has valid form data
-	// If yes then attempt to decode it to match on Command or CallbackID / InteractionType
+	// If yes then attempt to decode it to match on Command, Events challenge, or CallbackID / InteractionType
 	// If no then match custom paths
 	err := r.ParseForm()
-  	if strings.HasPrefix(r.URL.Path, h.basePath) && err == nil {
+	if strings.HasPrefix(r.URL.Path, h.basePath) && err == nil {
+		// Is this a url challenge from Slack?
+		body, err := ioutil.ReadAll(r.Body)
+		// This has a body, lets do stuff with it
+		if err == nil {
+			// Decode the potential challenge interactionPayload
+			var verificationEvent slackevents.EventsAPIURLVerificationEvent
+			err := json.Unmarshal(body, &verificationEvent)
+			if err == nil {
+				// This seems to be a url verification request from Slack, check it is and respond accordingly
+				if verificationEvent.Type == slackevents.URLVerification {
+					if _, err := w.Write([]byte(verificationEvent.Challenge)); err != nil {
+						h.ErrorLogf("Failed writing challenge back to verificationEvent: %w", err)
+					}
+					h.Logf("Successfully responded to URL verification requested from Slack")
+					return
+				}
+			}
+		}
+
 		// Is it a slash command?
 		if r.Form.Get("command") != "" {
 			sc, _ := slack.SlashCommandParse(r)
+			h.Logf("slack command triggered: %s", sc.Command)
 			// Loop through all our routes and attempt a match on the Command
 			for _, rt := range h.Routes {
 				if rt.Command == sc.Command {
@@ -116,17 +149,39 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Does it have a valid callback payload? - If so, it's a callback
-		payload, err := req.CallbackPayload()
+		// Is it an event callback? If so see if we can route to it
+		event, err := req.EventAPIEvent(body)
+		if err == nil && event != nil {
+			eventType := event.InnerEvent.Type
+			h.Logf("slack event triggered: %s", eventType)
+			// Loop through all our routes and attempt a match on the Event type
+			for _, rt := range h.Routes {
+				if eventType == rt.EventType {
+					// Send the interactionPayload as context
+					h.Logf("Serving request....")
+					serve(rt.Handler, event)
+					return
+				}
+			}
+			// We want to exit here because it's a valid event, but we don't have a route for it
+			h.Logf("no valid route found that matches [%s], returning", eventType)
+			return
+		}
+
+		h.Logf("Event err: %s", err)
+
+		// Does it have a valid interaction callback payload? - If so, it's an interaction callback
+		interactionPayload, err := req.InteractionCallbackPayload()
 		if err != nil {
-			h.Logf("Error parsing payload: %s", err)
+			h.ErrorLogf("Error parsing interactionPayload: %s", err)
 		}
 		// Loop through all our routes and attempt a match on the InteractionType / CallbackID pair
-		if payload != nil {
+		if interactionPayload != nil {
+			h.Logf("slack interaction callback triggered: %s", interactionPayload.CallbackID)
 			for _, rt := range h.Routes {
-				if string(payload.Type) == rt.InteractionType && payload.CallbackID == rt.CallbackID {
-					// Send the payload as context
-					serve(rt.Handler, payload)
+				if string(interactionPayload.Type) == rt.InteractionType && interactionPayload.CallbackID == rt.CallbackID {
+					// Send the interactionPayload as context
+					serve(rt.Handler, interactionPayload)
 					return
 				}
 			}
