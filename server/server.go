@@ -101,6 +101,11 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	serve := func(f SlackHandlerFunc, ctx interface{}) {
 		if err := f(res, req, ctx); err != nil {
 			h.ErrorLogf("HTTP handler error: %s", err)
+			if b, bodyErr := ioutil.ReadAll(r.Body); bodyErr == nil {
+				if len(b) > 0 {
+					h.ErrorLogf("Request body: %s", string(b), nil)
+				}
+			}
 		}
 	}
 
@@ -149,6 +154,28 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Is it an interaction callback?
+		if r.Form.Get("payload") != "" {
+			// Does it have a valid interaction callback payload? - If so, it's an interaction callback
+			interactionPayload, err := req.InteractionCallbackPayload()
+			if err != nil {
+				h.ErrorLogf("Error parsing interactionPayload: %s", err)
+				w.WriteHeader(400)
+				return
+			}
+			// Loop through all our routes and attempt a match on the InteractionType / CallbackID pair
+			if interactionPayload != nil {
+				h.Logf("slack interaction callback triggered: %s", interactionPayload.CallbackID)
+				for _, rt := range h.Routes {
+					if string(interactionPayload.Type) == rt.InteractionType && interactionPayload.CallbackID == rt.CallbackID {
+						// Send the interactionPayload as context
+						serve(rt.Handler, interactionPayload)
+						return
+					}
+				}
+			}
+		}
+
 		// Is it an event callback? If so see if we can route to it
 		event, err := req.EventAPIEvent(body)
 		if err == nil && event != nil {
@@ -168,24 +195,7 @@ func (h *SlackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.Logf("Event err: %s", err)
-
-		// Does it have a valid interaction callback payload? - If so, it's an interaction callback
-		interactionPayload, err := req.InteractionCallbackPayload()
-		if err != nil {
-			h.ErrorLogf("Error parsing interactionPayload: %s", err)
-		}
-		// Loop through all our routes and attempt a match on the InteractionType / CallbackID pair
-		if interactionPayload != nil {
-			h.Logf("slack interaction callback triggered: %s", interactionPayload.CallbackID)
-			for _, rt := range h.Routes {
-				if string(interactionPayload.Type) == rt.InteractionType && interactionPayload.CallbackID == rt.CallbackID {
-					// Send the interactionPayload as context
-					serve(rt.Handler, interactionPayload)
-					return
-				}
-			}
-		}
+		h.ErrorLogf("Event err:", err)
 	} else {
 		// If nothing else works, loop through all our routes and attempt a match on the path
 		for _, rt := range h.Routes {

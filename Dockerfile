@@ -1,4 +1,4 @@
-FROM golang:1.9-alpine AS builder
+FROM golang:1.13-alpine AS builder
 
 ENV BUILDROOT /go/src/github.com/skybet/go-helpdesk
 ADD . $BUILDROOT
