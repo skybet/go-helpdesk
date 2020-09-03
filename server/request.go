@@ -118,7 +118,7 @@ func (r *Request) parseInteractionPayload() error {
 	var payload slack.InteractionCallback
 	j := r.Form.Get("payload")
 	if j == "" {
-		return errors.New("empty payload")
+		return errors.New("empty payload ")
 	}
 	if err := json.Unmarshal([]byte(j), &payload); err != nil {
 		return fmt.Errorf("error parsing payload JSON: %s", err)

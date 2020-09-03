@@ -49,7 +49,7 @@ An example [LinuxKit](https://github.com/linuxkit/linuxkit) configuration is inc
 
 You will want to edit/make a copy of this file for your own use and add you Slack tokens and secret. Remember not to commit these!
 
-Refer to the LinuxKit documentation for full usage. However you can run this locally with just a few commands.
+Refer to the LinuxKit documentation for full usage. However, you can run this locally with just a few commands.
 
 ```
 go get -u github.com/linuxkit/linuxkit/src/cmd/linuxkit
