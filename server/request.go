@@ -8,15 +8,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nlopes/slack/slackevents"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/nlopes/slack/slackevents"
+
 	"github.com/nlopes/slack"
-	"regexp"
 )
 
 // Request wraps http.Request
@@ -30,16 +30,8 @@ func (r *Request) Validate(secret string, dnHeader *string) error {
 	// If a dnHeader has been provided, check that the header contains the slack CN
 	if dnHeader != nil {
 		slackDNHeader := r.Header.Get(*dnHeader)
-		dnError := fmt.Errorf("invalid CN in DN header")
-
-		r, _ := regexp.Compile("CN=(.*?),")
-		cn := r.FindStringSubmatch(slackDNHeader)
-		if len(cn) != 2 {		// It should match the CN exactly one, and contain the CN value as a group
-			return dnError
-		}
-
-		if cn[1] != "platform-tls-client.slack.com" {
-			return dnError
+		if !strings.Contains(slackDNHeader, "platform-tls-client.slack.com") {
+			return fmt.Errorf("invalid CN in DN header")
 		}
 	}
 

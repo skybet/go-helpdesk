@@ -5,7 +5,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: cimg/go:1.13
+      - image: cimg/go:1.15
     working_directory: ~/go/src/github.com/skybet/go-helpdesk
     steps:
       - checkout
@@ -14,7 +14,7 @@ jobs:
       - run: go test -v ./...
       - run: goveralls -service=circle-ci -coverprofile=coverage.txt -repotoken=$COVERALLS_REPO_TOKEN
       - setup_remote_docker
-      - run: docker build -t adampointer83/go-helpdesk:$CIRCLE_BRANCH .
+      - run: docker build -t adampointer83/go-helpdesk:$CIRCLE_SHA1 .
       - run: docker login -u $DOCKER_USER -p $DOCKER_PASS
-      - run: docker push adampointer83/go-helpdesk:$CIRCLE_BRANCH
+      - run: docker push adampointer83/go-helpdesk:$CIRCLE_SHA1
          
